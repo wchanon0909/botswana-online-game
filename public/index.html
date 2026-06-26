@@ -124,14 +124,17 @@
             <span>การ์ดในมือของฉัน</span>
             <small id="handHint">คลิกการ์ดเพื่อวางในตาของคุณ</small>
           </div>
-          <label class="autoplay-toggle">
-            <input id="autoPlayToggle" type="checkbox" />
-            <span class="toggle-ui" aria-hidden="true"></span>
-            <span>
-              <strong>Auto Play</strong>
-              <small id="autoPlayStatus">ปิด</small>
-            </span>
-          </label>
+          <div class="hand-controls">
+            <label class="autoplay-toggle">
+              <input id="autoPlayToggle" type="checkbox" />
+              <span class="toggle-ui" aria-hidden="true"></span>
+              <span>
+                <strong>Auto Play</strong>
+                <small id="autoPlayStatus">ปิด</small>
+              </span>
+            </label>
+            <button id="cardFaceToggle" type="button" class="face-toggle">🙈 คว่ำการ์ด</button>
+          </div>
         </div>
         <div id="myHand" class="hand"></div>
       </section>

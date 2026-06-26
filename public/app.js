@@ -6,6 +6,7 @@ let timerInterval = null;
 let titleFlashInterval = null;
 let originalTitle = document.title;
 let draggedCardId = null;
+let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDown') === 'true';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,6 +30,7 @@ const turnTimerLabel = $('turnTimerLabel');
 const turnTimerText = $('turnTimerText');
 const autoPlayToggle = $('autoPlayToggle');
 const autoPlayStatus = $('autoPlayStatus');
+const cardFaceToggle = $('cardFaceToggle');
 const turnTimeControl = $('turnTimeControl');
 const turnSecondsInput = $('turnSecondsInput');
 
@@ -73,6 +75,15 @@ if (autoPlayToggle) {
     const enabled = autoPlayToggle.checked;
     localStorage.setItem('botswanaAutoPlay', String(enabled));
     socket.emit('setAutoPlay', { enabled });
+  });
+}
+
+if (cardFaceToggle) {
+  cardFaceToggle.addEventListener('click', () => {
+    cardsFaceDown = !cardsFaceDown;
+    localStorage.setItem('botswanaCardsFaceDown', String(cardsFaceDown));
+    renderCardFaceControl();
+    renderHand();
   });
 }
 
@@ -136,6 +147,7 @@ function render() {
 
   renderTurnSetting();
   renderAutoPlayControl();
+  renderCardFaceControl();
   renderTurnTimer();
   updateTitleFlash();
   renderPlayers();
@@ -187,6 +199,13 @@ function renderAutoPlayControl() {
   } else {
     autoPlayStatus.textContent = 'ปิด';
   }
+}
+
+function renderCardFaceControl() {
+  if (!cardFaceToggle) return;
+  cardFaceToggle.textContent = cardsFaceDown ? '👀 หงายการ์ด' : '🙈 คว่ำการ์ด';
+  cardFaceToggle.classList.toggle('active', cardsFaceDown);
+  cardFaceToggle.setAttribute('aria-pressed', String(cardsFaceDown));
 }
 
 function renderTurnTimer() {
@@ -254,9 +273,13 @@ function renderPlayers() {
     const card = document.createElement('div');
     card.className = 'player-card';
     const isTurn = state.currentPlayerId === player.id || state.pendingTakePlayerId === player.id;
-    const previewRoundScore = calculateLiveRoundScore(player);
-    const visibleRoundScore = state.phase === 'round_end' ? player.roundScore : previewRoundScore;
-    const currentTotalScore = state.phase === 'round_end' ? player.totalScore : (player.totalScore + previewRoundScore);
+    const liveRoundScore = calculateLiveRoundScore(player);
+    const previousTotalScore = state.phase === 'round_end'
+      ? Math.max(0, player.totalScore - player.roundScore)
+      : player.totalScore;
+    const currentTotalScore = state.phase === 'round_end'
+      ? player.totalScore
+      : previousTotalScore + liveRoundScore;
     const tokenText = state.animals
       .map((a) => {
         const count = player.tokens[a.key] || 0;
@@ -271,11 +294,12 @@ function renderPlayers() {
         <span class="player-name">${escapeHtml(player.name)}</span>
         <span class="badge">${player.isHost ? 'Host' : `Seat ${player.seat}`}</span>
       </div>
-      <div class="score-line"><span>${player.connected ? '🟢 Online' : '⚪ Offline'}</span><span>การ์ด ${player.handCount}</span></div>
-      <div class="score-line"><span>คะแนนรอบนี้ ${visibleRoundScore}</span><strong>รวมปัจจุบัน ${currentTotalScore}</strong></div>
-      <div class="player-subscore">คะแนนสะสมก่อนจบรอบ: ${player.totalScore}</div>
+      <div class="player-stat-grid">
+        <div><span>การ์ดในมือ</span><strong>${player.handCount}</strong></div>
+        <div><span>รวมรอบก่อน</span><strong>${previousTotalScore}</strong></div>
+        <div><span>รวมปัจจุบัน</span><strong>${currentTotalScore}</strong></div>
+      </div>
       <div class="player-tokens">${tokenText || '<span class="token-pill empty">ยังไม่มีสัตว์</span>'}</div>
-      ${player.autoPlay ? `<div class="auto-chip">⚡ ${player.autoPlayTemporary ? 'Auto ชั่วคราว' : 'Auto Play'}</div>` : ''}
     `;
     if (isTurn) card.style.outline = '3px solid rgba(255, 183, 3, 0.55)';
     list.appendChild(card);
@@ -340,15 +364,23 @@ function renderHand() {
     el.className = `hand-card ${isMyTurn ? 'playable' : 'not-playable'}`;
     el.dataset.cardId = card.id;
     el.draggable = true;
-    el.style.background = cardBackground(animal.key);
+    el.style.background = cardsFaceDown ? '' : cardBackground(animal.key);
     el.style.animationDelay = `${Math.min(index * 0.035, 0.5)}s`;
     el.setAttribute('aria-disabled', String(!isMyTurn));
-    el.title = 'ลากเพื่อเรียงลำดับการ์ด';
-    el.innerHTML = `
-      <span class="card-label">${animal.name}</span>
-      <span class="card-emoji">${animal.emoji}</span>
-      <span class="card-value">${card.value}</span>
-    `;
+    el.title = cardsFaceDown ? 'การ์ดถูกคว่ำอยู่: ลากเพื่อเรียงลำดับ หรือคลิกเพื่อวางเมื่อถึงตา' : 'ลากเพื่อเรียงลำดับการ์ด';
+    if (cardsFaceDown) {
+      el.classList.add('face-down');
+      el.innerHTML = `
+        <span class="card-back-icon">🦁</span>
+        <span class="card-back-text">SAFARI</span>
+      `;
+    } else {
+      el.innerHTML = `
+        <span class="card-label">${animal.name}</span>
+        <span class="card-emoji">${animal.emoji}</span>
+        <span class="card-value">${card.value}</span>
+      `;
+    }
     el.addEventListener('click', () => {
       if (!isMyTurn) return;
       socket.emit('playCard', { cardId: card.id });
@@ -410,7 +442,7 @@ function renderLog() {
   log.innerHTML = state.log.slice().reverse().map((entry) => {
     if (typeof entry === 'string') return `<div class="log-entry">${escapeHtml(entry)}</div>`;
     if (entry.type === 'move') return moveLogHtml(entry);
-    return `<div class="log-entry"><span class="log-stamp">${escapeHtml(entry.stamp || '')}</span>${escapeHtml(entry.message || '')}</div>`;
+    return `<div class="log-entry text-log"><span class="log-stamp">${escapeHtml(entry.stamp || '')}</span><span class="log-message">${escapeHtml(entry.message || '')}</span></div>`;
   }).join('');
 }
 
