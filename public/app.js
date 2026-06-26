@@ -1,6 +1,9 @@
 const socket = io();
 let state = null;
 let scoreModalShownForRound = 0;
+let timerInterval = null;
+let titleFlashInterval = null;
+let originalTitle = document.title;
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,9 +22,17 @@ const tokenChoices = $('tokenChoices');
 const scoreModal = $('scoreModal');
 const scoreCloseBtn = $('scoreCloseBtn');
 const toast = $('toast');
+const turnTimer = $('turnTimer');
+const turnTimerLabel = $('turnTimerLabel');
+const turnTimerText = $('turnTimerText');
 
 const savedName = localStorage.getItem('botswanaPlayerName');
 if (savedName) playerName.value = savedName;
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) stopTitleFlash();
+  updateTitleFlash();
+});
 
 const params = new URLSearchParams(window.location.search);
 const roomFromUrl = params.get('room');
@@ -96,6 +107,8 @@ function render() {
   nextRoundBtn.classList.toggle('hidden', !(state.isHost && state.phase === 'round_end'));
   resetBtn.classList.toggle('hidden', !(state.isHost && state.phase !== 'lobby'));
 
+  renderTurnTimer();
+  updateTitleFlash();
   renderPlayers();
   renderBoard();
   renderHand();
@@ -118,6 +131,71 @@ function animalMeta(key) {
   return state.animals.find((a) => a.key === key);
 }
 
+function isMyActionTurn() {
+  if (!state) return false;
+  return (state.phase === 'playing' && state.currentPlayerId === state.myId)
+    || (state.phase === 'take' && state.pendingTakePlayerId === state.myId);
+}
+
+function renderTurnTimer() {
+  if (!turnTimer || !state) return;
+  const shouldShow = isMyActionTurn();
+  turnTimer.classList.toggle('hidden', !shouldShow);
+
+  if (!shouldShow) {
+    stopTimerInterval();
+    return;
+  }
+
+  turnTimerLabel.textContent = state.phase === 'take' ? 'เลือกสัตว์ของคุณ' : 'ถึงตาคุณแล้ว';
+  updateTurnTimerText();
+  if (!timerInterval) timerInterval = setInterval(updateTurnTimerText, 500);
+}
+
+function updateTurnTimerText() {
+  if (!state || !isMyActionTurn()) return;
+  const limit = state.turnLimitSeconds || 30;
+  const startedAt = state.turnStartedAt || Date.now();
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+  const remaining = Math.max(0, limit - elapsed);
+  const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const seconds = String(remaining % 60).padStart(2, '0');
+  turnTimerText.textContent = `${minutes}:${seconds}`;
+  turnTimer.classList.toggle('urgent', remaining <= 10);
+}
+
+function stopTimerInterval() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function updateTitleFlash() {
+  if (document.hidden && isMyActionTurn()) {
+    startTitleFlash();
+  } else {
+    stopTitleFlash();
+  }
+}
+
+function startTitleFlash() {
+  if (titleFlashInterval) return;
+  let visible = false;
+  titleFlashInterval = setInterval(() => {
+    visible = !visible;
+    document.title = visible ? '🔔 ถึงตาคุณแล้ว!' : originalTitle;
+  }, 900);
+}
+
+function stopTitleFlash() {
+  if (titleFlashInterval) {
+    clearInterval(titleFlashInterval);
+    titleFlashInterval = null;
+  }
+  document.title = originalTitle;
+}
+
 function renderPlayers() {
   const list = $('playersList');
   list.innerHTML = '';
@@ -125,8 +203,16 @@ function renderPlayers() {
     const card = document.createElement('div');
     card.className = 'player-card';
     const isTurn = state.currentPlayerId === player.id;
+    const previewRoundScore = calculateLiveRoundScore(player);
+    const visibleRoundScore = state.phase === 'round_end' ? player.roundScore : previewRoundScore;
+    const currentTotalScore = state.phase === 'round_end' ? player.totalScore : (player.totalScore + previewRoundScore);
     const tokenText = state.animals
-      .map((a) => (player.tokens[a.key] ? `<span class="token-pill">${a.emoji} ${player.tokens[a.key]}</span>` : ''))
+      .map((a) => {
+        const count = player.tokens[a.key] || 0;
+        return count
+          ? `<span class="token-pill"><span class="token-pill-emoji">${a.emoji}</span><span class="token-pill-count">${count}</span></span>`
+          : '';
+      })
       .join('');
 
     card.innerHTML = `
@@ -135,12 +221,23 @@ function renderPlayers() {
         <span class="badge">${player.isHost ? 'Host' : `Seat ${player.seat}`}</span>
       </div>
       <div class="score-line"><span>${player.connected ? '🟢 Online' : '⚪ Offline'}</span><span>การ์ด ${player.handCount}</span></div>
-      <div class="score-line"><span>รอบนี้ ${player.roundScore}</span><strong>รวม ${player.totalScore}</strong></div>
-      <div class="player-tokens">${tokenText || '<span class="token-pill">ยังไม่มีสัตว์</span>'}</div>
+      <div class="score-line"><span>คะแนนรอบนี้ ${visibleRoundScore}</span><strong>รวมปัจจุบัน ${currentTotalScore}</strong></div>
+      <div class="player-subscore">คะแนนสะสมก่อนจบรอบ: ${player.totalScore}</div>
+      <div class="player-tokens">${tokenText || '<span class="token-pill empty">ยังไม่มีสัตว์</span>'}</div>
     `;
     if (isTurn) card.style.outline = '3px solid rgba(255, 183, 3, 0.55)';
     list.appendChild(card);
   }
+}
+
+function calculateLiveRoundScore(player) {
+  if (!player) return 0;
+  return state.animals.reduce((sum, animal) => {
+    const pile = state.board[animal.key] || [];
+    const latest = pile.length ? pile[pile.length - 1].value : 0;
+    const tokenCount = player.tokens[animal.key] || 0;
+    return sum + (latest * tokenCount);
+  }, 0);
 }
 
 function renderBoard() {
