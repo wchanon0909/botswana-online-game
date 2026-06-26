@@ -48,12 +48,24 @@
     </section>
 
     <section id="game" class="game-layout hidden">
+      <div id="turnTimer" class="turn-timer hidden" aria-live="polite">
+        <span class="timer-pulse">⏱️</span>
+        <div>
+          <span id="turnTimerLabel">ถึงตาคุณ</span>
+          <strong id="turnTimerText">00:30</strong>
+        </div>
+      </div>
       <header class="topbar glass-card">
         <div>
           <p class="eyebrow">Room</p>
           <h2 id="roomTitle">----</h2>
         </div>
         <div class="top-actions">
+          <label id="turnTimeControl" class="turn-time-control hidden">
+            เวลาต่อรอบ
+            <input id="turnSecondsInput" type="number" min="5" max="180" step="5" value="30" />
+            วินาที
+          </label>
           <button id="copyLinkBtn" class="small-btn">คัดลอกลิงก์</button>
           <button id="startBtn" class="primary-btn smallish">เริ่มเกม</button>
           <button id="nextRoundBtn" class="secondary-btn smallish hidden">รอบถัดไป</button>
@@ -107,9 +119,22 @@
       </section>
 
       <section class="hand-panel glass-card">
-        <div class="panel-title">
-          <span>การ์ดในมือของฉัน</span>
-          <small id="handHint">คลิกการ์ดเพื่อวางในตาของคุณ</small>
+        <div class="panel-title hand-title">
+          <div>
+            <span>การ์ดในมือของฉัน</span>
+            <small id="handHint">คลิกการ์ดเพื่อวางในตาของคุณ</small>
+          </div>
+          <div class="hand-controls">
+            <label class="autoplay-toggle">
+              <input id="autoPlayToggle" type="checkbox" />
+              <span class="toggle-ui" aria-hidden="true"></span>
+              <span>
+                <strong>Auto Play</strong>
+                <small id="autoPlayStatus">ปิด</small>
+              </span>
+            </label>
+            <button id="cardFaceToggle" type="button" class="face-toggle">🙈 คว่ำการ์ด</button>
+          </div>
         </div>
         <div id="myHand" class="hand"></div>
       </section>
