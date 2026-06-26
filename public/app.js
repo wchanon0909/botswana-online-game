@@ -7,6 +7,7 @@ let titleFlashInterval = null;
 let originalTitle = document.title;
 let draggedCardId = null;
 let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDown') === 'true';
+let lastAnimatedMoveId = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,6 +34,9 @@ const autoPlayStatus = $('autoPlayStatus');
 const cardFaceToggle = $('cardFaceToggle');
 const turnTimeControl = $('turnTimeControl');
 const turnSecondsInput = $('turnSecondsInput');
+const chatForm = $('chatForm');
+const chatInput = $('chatInput');
+const chatMessages = $('chatMessages');
 
 const savedName = localStorage.getItem('botswanaPlayerName');
 if (savedName) playerName.value = savedName;
@@ -96,6 +100,16 @@ if (turnSecondsInput) {
   turnSecondsInput.addEventListener('blur', sendTurnLimit);
 }
 
+if (chatForm) {
+  chatForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const text = (chatInput?.value || '').trim();
+    if (!text) return;
+    socket.emit('sendChat', { text });
+    chatInput.value = '';
+  });
+}
+
 copyLinkBtn.addEventListener('click', async () => {
   if (!state) return;
   const url = `${window.location.origin}${window.location.pathname}?room=${state.roomCode}`;
@@ -137,7 +151,7 @@ function render() {
   $('phaseText').textContent = phaseLabel(state.phase);
   $('turnText').textContent = state.currentPlayerName || (state.phase === 'lobby' ? 'รอเริ่มเกม' : '-');
   $('roundText').textContent = state.roundNo || 0;
-  $('variantText').textContent = `${state.animals.length} สัตว์ · ${state.turnLimitSeconds || 30}s`;
+  $('variantText').textContent = `${state.ruleSummary || `${state.animals.length} สัตว์`} · ${state.turnLimitSeconds || 30}s`;
   $('playerCountText').textContent = `${state.players.length}/${state.maxPlayers}`;
   $('lastActionText').textContent = state.lastAction || 'พร้อมเล่น';
 
@@ -152,8 +166,10 @@ function render() {
   updateTitleFlash();
   renderPlayers();
   renderBoard();
+  renderChat();
   renderHand();
   renderLog();
+  runTokenMoveAnimation();
   renderTokenModal();
   renderScoreModal();
 }
@@ -272,6 +288,7 @@ function renderPlayers() {
   for (const player of state.players) {
     const card = document.createElement('div');
     card.className = 'player-card';
+    card.dataset.playerId = player.id;
     const isTurn = state.currentPlayerId === player.id || state.pendingTakePlayerId === player.id;
     const liveRoundScore = calculateLiveRoundScore(player);
     const previousTotalScore = state.phase === 'round_end'
@@ -295,7 +312,7 @@ function renderPlayers() {
       <div class="player-stat-grid">
         <div><span>การ์ด</span><strong>${player.handCount}</strong></div>
         <div><span>คะแนนก่อน</span><strong>${previousTotalScore}</strong></div>
-        <div><span>รอบปัจจุบัน</span><strong>${currentRoundScore}</strong></div>
+        <div><span>คะแนนสดรอบนี้</span><strong>${currentRoundScore}</strong></div>
       </div>
       <div class="player-tokens">${tokenText || '<span class="token-pill empty">ยังไม่มีสัตว์</span>'}</div>
     `;
@@ -320,19 +337,22 @@ function renderBoard() {
   for (const animal of state.animals) {
     const pile = state.board[animal.key] || [];
     const latest = pile.length ? pile[pile.length - 1].value : 0;
+    const left = state.availableTokens[animal.key] || 0;
+    const hasTokenBank = (state.tokensPerAnimal || 0) > 0;
+    const tokenStateClass = hasTokenBank ? (left <= 0 ? 'token-empty' : (left <= 1 ? 'token-low' : '')) : '';
     const row = document.createElement('div');
-    row.className = 'animal-row';
+    row.className = `animal-row ${tokenStateClass}`;
     row.innerHTML = `
       <div class="animal-meta">
         <div class="animal-title"><span class="animal-emoji">${animal.emoji}</span><span>${animal.thai}</span></div>
-        <div class="current-value">ค่าปัจจุบัน: <strong>${latest}</strong> · วางแล้ว ${pile.length}/6</div>
+        <div class="current-value">ค่าปัจจุบัน: <strong>${latest}</strong> · วางแล้ว ${pile.length}/${state.cardsPerAnimal || 6}</div>
       </div>
       <div class="pile" aria-label="${animal.name} pile">
         ${pile.length ? pile.map((card) => cardHtml(card, animal, 'board-card')).join('') : '<div class="empty-state">ยังไม่มีการ์ด</div>'}
       </div>
-      <div class="token-bank">
+      <div class="token-bank ${tokenStateClass}" data-token-bank="${animal.key}">
         <div class="big-token">${animal.emoji}</div>
-        <div class="token-count">เหลือ ${state.availableTokens[animal.key] || 0}/${state.tokensPerAnimal || 0}</div>
+        <div class="token-count">${hasTokenBank ? (left <= 0 ? 'หมดแล้ว' : `เหลือ ${left}/${state.tokensPerAnimal || 0}`) : 'รอเริ่ม'}</div>
       </div>
     `;
     rows.appendChild(row);
@@ -431,6 +451,23 @@ function emitCurrentHandOrder() {
   if (cardIds.length === state.myHand.length) socket.emit('reorderHand', { cardIds });
 }
 
+function renderChat() {
+  if (!chatMessages || !state) return;
+  const messages = (state.chat || []).slice(-5);
+  if (!messages.length) {
+    chatMessages.innerHTML = '<div class="chat-empty">ยังไม่มีข้อความ</div>';
+    return;
+  }
+  chatMessages.innerHTML = messages.map((item) => `
+    <div class="chat-message ${item.playerId === state.myId ? 'mine' : ''}">
+      <span class="chat-stamp">${escapeHtml(item.stamp || '')}</span>
+      <strong>${escapeHtml(item.playerName || 'Player')}</strong>
+      <span>${escapeHtml(item.text || '')}</span>
+    </div>
+  `).join('');
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
 function renderLog() {
   const log = $('gameLog');
   if (!state.log.length) {
@@ -511,17 +548,21 @@ function renderTokenModal() {
 
 function renderScoreModal() {
   if (state.phase !== 'round_end') return;
-  if (scoreModalShownForRound === state.roundNo) return;
-  scoreModalShownForRound = state.roundNo;
-  const scores = [...state.players].sort((a, b) => (b.totalScore - a.totalScore) || (b.roundScore - a.roundScore) || (a.seat - b.seat));
+  const result = state.roundResult || null;
+  const resultId = result?.id || `round-${state.roundNo}-${state.players.map((p) => `${p.id}:${p.totalScore}`).join('|')}`;
+  if (scoreModalShownForRound === resultId) return;
+  scoreModalShownForRound = resultId;
+  const scores = result?.standings || [...state.players]
+    .sort((a, b) => (b.totalScore - a.totalScore) || (b.roundScore - a.roundScore) || (a.seat - b.seat))
+    .map((p, index) => ({ ...p, rank: index + 1 }));
   const medals = ['🥇', '🥈', '🥉'];
   const topThree = scores.slice(0, 3);
   const rest = scores.slice(3);
   $('scoreSummary').innerHTML = `
     <div class="scoreboard-head">
-      <span class="scoreboard-kicker">Round ${state.roundNo} Complete</span>
+      <span class="scoreboard-kicker">Round ${result?.roundNo || state.roundNo} Complete</span>
       <strong>Score Board</strong>
-      <small>อันดับเรียงตามคะแนนรวมปัจจุบัน</small>
+      <small>${escapeHtml(result?.reason || 'สรุปคะแนนท้ายรอบ')} · ${escapeHtml(result?.ruleSummary || state.ruleSummary || '')}</small>
     </div>
     <div class="podium">
       ${topThree.map((p, index) => podiumHtml(p, index, medals[index])).join('')}
@@ -553,6 +594,41 @@ function scoreRowHtml(player, rank) {
       <strong>${player.totalScore}</strong>
     </div>
   `;
+}
+
+function runTokenMoveAnimation() {
+  const move = state?.lastTokenMove;
+  if (!move || move.id === lastAnimatedMoveId) return;
+  lastAnimatedMoveId = move.id;
+  window.requestAnimationFrame(() => animateTokenMove(move));
+}
+
+function animateTokenMove(move) {
+  const animal = animalMeta(move.animalKey);
+  if (!animal) return;
+  const sourceBank = [...document.querySelectorAll('[data-token-bank]')]
+    .find((el) => el.dataset.tokenBank === move.animalKey);
+  const targetCard = [...document.querySelectorAll('[data-player-id]')]
+    .find((el) => el.dataset.playerId === move.playerId);
+  const source = sourceBank?.querySelector('.big-token');
+  const target = targetCard?.querySelector('.player-tokens') || targetCard;
+  if (!source || !target) return;
+  const srcRect = source.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const flyer = document.createElement('div');
+  flyer.className = 'flying-token';
+  flyer.textContent = animal.emoji;
+  flyer.style.left = `${srcRect.left + srcRect.width / 2 - 20}px`;
+  flyer.style.top = `${srcRect.top + srcRect.height / 2 - 20}px`;
+  document.body.appendChild(flyer);
+  const dx = targetRect.left + targetRect.width / 2 - (srcRect.left + srcRect.width / 2);
+  const dy = targetRect.top + targetRect.height / 2 - (srcRect.top + srcRect.height / 2);
+  const animation = flyer.animate([
+    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+    { transform: `translate(${dx * 0.45}px, ${dy * 0.35 - 70}px) scale(1.18)`, opacity: 1, offset: 0.55 },
+    { transform: `translate(${dx}px, ${dy}px) scale(0.72)`, opacity: 0.2 }
+  ], { duration: 820, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+  animation.onfinish = () => flyer.remove();
 }
 
 function cardHtml(card, animal, className) {

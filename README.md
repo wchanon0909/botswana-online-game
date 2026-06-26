@@ -104,3 +104,16 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Player cards show only: hand count, previous total score, current round realtime score, and collected animal tokens.
 - Game Log records card placement immediately, then records the selected animal token as a separate feed entry.
 - The welcome screen is simplified to player name, room code, Join, Create Room, and animated animal icons.
+
+## Rules/chat/responsive update
+
+- 2-5 players: 5 animal types, cards 0-5.
+- 6 players: 6 animal types, cards 0-5.
+- 7 players: 6 animal types, cards 0-6.
+- Animal tokens remain fixed at 5 tokens per animal type for all player counts.
+- The top status bar shows the active rule summary, including player count, animal count, card range, and deck size.
+- Round-end scoring uses a server-side round result snapshot so the scoreboard modal opens more reliably.
+- Animal token banks highlight when only 1 token remains or when the token is exhausted.
+- Selecting an animal triggers a client-side flying animal animation from the board to the player card.
+- Added real-time chat above the player's hand.
+- Responsive layout adjustments reduce overlap when the browser window is resized.
