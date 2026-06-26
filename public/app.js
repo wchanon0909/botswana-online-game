@@ -37,6 +37,7 @@ const turnSecondsInput = $('turnSecondsInput');
 const chatForm = $('chatForm');
 const chatInput = $('chatInput');
 const chatMessages = $('chatMessages');
+const rankingTrain = $('rankingTrain');
 
 const savedName = localStorage.getItem('botswanaPlayerName');
 if (savedName) playerName.value = savedName;
@@ -164,6 +165,7 @@ function render() {
   renderCardFaceControl();
   renderTurnTimer();
   updateTitleFlash();
+  renderRankingTrain();
   renderPlayers();
   renderBoard();
   renderChat();
@@ -287,14 +289,9 @@ function renderPlayers() {
   list.innerHTML = '';
   for (const player of state.players) {
     const card = document.createElement('div');
-    card.className = 'player-card';
+    card.className = 'player-card compact-player-card';
     card.dataset.playerId = player.id;
     const isTurn = state.currentPlayerId === player.id || state.pendingTakePlayerId === player.id;
-    const liveRoundScore = calculateLiveRoundScore(player);
-    const previousTotalScore = state.phase === 'round_end'
-      ? Math.max(0, player.totalScore - player.roundScore)
-      : player.totalScore;
-    const currentRoundScore = state.phase === 'round_end' ? player.roundScore : liveRoundScore;
     const tokenText = state.animals
       .map((a) => {
         const count = player.tokens[a.key] || 0;
@@ -307,18 +304,42 @@ function renderPlayers() {
     card.innerHTML = `
       <div class="player-head">
         <span class="player-name">${escapeHtml(player.name)}</span>
-        <span class="badge">${player.isHost ? 'Host' : `Seat ${player.seat}`}</span>
+        <span class="badge">Seat ${player.seat}</span>
       </div>
-      <div class="player-stat-grid">
-        <div><span>การ์ด</span><strong>${player.handCount}</strong></div>
-        <div><span>คะแนนก่อน</span><strong>${previousTotalScore}</strong></div>
-        <div><span>คะแนนสดรอบนี้</span><strong>${currentRoundScore}</strong></div>
-      </div>
+      <div class="player-hand-count">การ์ดในมือ <strong>${player.handCount}</strong> ใบ</div>
       <div class="player-tokens">${tokenText || '<span class="token-pill empty">ยังไม่มีสัตว์</span>'}</div>
     `;
     if (isTurn) card.style.outline = '3px solid rgba(255, 183, 3, 0.55)';
     list.appendChild(card);
   }
+}
+
+function renderRankingTrain() {
+  if (!rankingTrain || !state) return;
+  if (!state.players.length) {
+    rankingTrain.innerHTML = '<span class="ranking-empty">ยังไม่มีผู้เล่น</span>';
+    return;
+  }
+
+  const ranking = [...state.players]
+    .map((player) => ({
+      ...player,
+      liveScore: state.phase === 'round_end' ? player.roundScore : calculateLiveRoundScore(player)
+    }))
+    .sort((a, b) => (b.liveScore - a.liveScore) || (b.totalScore - a.totalScore) || (a.seat - b.seat));
+
+  rankingTrain.innerHTML = `
+    <div class="ranking-label">Realtime Ranking</div>
+    <div class="train-track">
+      ${ranking.map((player, index) => `
+        <div class="train-car ${index === 0 ? 'leader' : ''}" title="${escapeHtml(player.name)}: ${player.liveScore}">
+          <span class="train-rank">${index === 0 ? '👑' : `#${index + 1}`}</span>
+          <strong>${escapeHtml(player.name)}</strong>
+          <small>${player.liveScore}</small>
+        </div>
+      `).join('<span class="train-link">→</span>')}
+    </div>
+  `;
 }
 
 function calculateLiveRoundScore(player) {
@@ -453,7 +474,7 @@ function emitCurrentHandOrder() {
 
 function renderChat() {
   if (!chatMessages || !state) return;
-  const messages = (state.chat || []).slice(-5);
+  const messages = (state.chat || []).slice(-8);
   if (!messages.length) {
     chatMessages.innerHTML = '<div class="chat-empty">ยังไม่มีข้อความ</div>';
     return;

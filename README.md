@@ -117,3 +117,11 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Selecting an animal triggers a client-side flying animal animation from the board to the player card.
 - Added real-time chat above the player's hand.
 - Responsive layout adjustments reduce overlap when the browser window is resized.
+
+
+## Latest UI update
+- Player cards now show only hand count and collected animals.
+- Realtime ranking train added above the three main panels.
+- Safari Board animal order is shuffled each round.
+- Chat area shows at least four visible lines.
+- Game Log spacing adjusted to prevent overlap.

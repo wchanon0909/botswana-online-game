@@ -115,7 +115,7 @@ function roomAnimals(room) {
 function syncLobbyAnimals(room) {
   if (!room || room.phase !== 'lobby') return;
   const format = roomFormat(room);
-  room.animals = activeAnimalsForPlayerCount(room.players.length);
+  room.animals = shuffle(activeAnimalsForPlayerCount(room.players.length));
   room.cardMaxValue = format.cardMaxValue;
   room.cardsPerAnimal = format.cardsPerAnimal;
   room.board = initialBoard(room.animals);
@@ -289,7 +289,7 @@ function createRoom(hostId, hostName) {
     chat: [],
     roundResult: null,
     lastTokenMove: null,
-    animals: activeAnimalsForPlayerCount(1),
+    animals: shuffle(activeAnimalsForPlayerCount(1)),
     cardMaxValue: BASE_CARD_MAX_VALUE,
     cardsPerAnimal: BASE_CARD_MAX_VALUE + 1,
     board: initialBoard(activeAnimalsForPlayerCount(1)),
@@ -403,7 +403,7 @@ function startRound(room) {
   const format = gameFormatForPlayerCount(playerCount);
   room.phase = 'playing';
   room.roundNo += 1;
-  room.animals = activeAnimalsForPlayerCount(playerCount);
+  room.animals = shuffle(activeAnimalsForPlayerCount(playerCount));
   room.cardMaxValue = format.cardMaxValue;
   room.cardsPerAnimal = format.cardsPerAnimal;
   room.roundResult = null;
@@ -589,7 +589,7 @@ function resetRoom(room) {
   room.pendingCard = null;
   room.roundResult = null;
   room.lastTokenMove = null;
-  room.animals = activeAnimalsForPlayerCount(room.players.length);
+  room.animals = shuffle(activeAnimalsForPlayerCount(room.players.length));
   room.cardMaxValue = cardMaxForPlayerCount(room.players.length);
   room.cardsPerAnimal = room.cardMaxValue + 1;
   room.board = initialBoard(room.animals);
