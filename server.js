@@ -1,6 +1,8 @@
 const express = require('express');
 const http = require('http');
 const os = require('os');
+const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
@@ -8,11 +10,29 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
+const publicDir = path.join(__dirname, 'public');
+const indexFile = path.join(publicDir, 'index.html');
+
 app.get('/health', (req, res) => {
   res.status(200).json({ ok: true, service: 'botswana-online-game' });
 });
 
-app.use(express.static('public'));
+app.use(express.static(publicDir));
+
+app.get('/', (req, res) => {
+  if (!fs.existsSync(indexFile)) {
+    return res.status(500).send('public/index.html is missing. Please upload the public folder to GitHub.');
+  }
+  return res.sendFile(indexFile);
+});
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/socket.io')) return next();
+  if (!fs.existsSync(indexFile)) {
+    return res.status(500).send('public/index.html is missing. Please upload the public folder to GitHub.');
+  }
+  return res.sendFile(indexFile);
+});
 
 const ANIMALS = [
   { key: 'lion', name: 'Lion', thai: 'สิงโต', emoji: '🦁', accent: '#f4a261' },
