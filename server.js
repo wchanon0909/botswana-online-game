@@ -6,6 +6,10 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
+const DEFAULT_TURN_SECONDS = 30;
+const MIN_TURN_SECONDS = 5;
+const MAX_TURN_SECONDS = 180;
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
@@ -44,6 +48,7 @@ const ANIMALS = [
 
 const rooms = new Map();
 const socketToRoom = new Map();
+let logSeq = 1;
 
 function randomCode() {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -95,12 +100,19 @@ function compactPlayer(player) {
     totalScore: player.totalScore,
     roundScore: player.roundScore,
     handCount: player.hand.length,
-    tokens: player.tokens
+    tokens: player.tokens,
+    autoPlay: player.autoPlay,
+    autoPlayTemporary: player.autoPlayTemporary
   };
+}
+
+function orderedPlayers(room) {
+  return [...room.players].sort((a, b) => (a.seat - b.seat) || a.name.localeCompare(b.name));
 }
 
 function roomPublicState(room, socketId) {
   const me = room.players.find((p) => p.id === socketId);
+  const playersInTurnOrder = orderedPlayers(room);
   return {
     roomCode: room.code,
     phase: room.phase,
@@ -113,16 +125,19 @@ function roomPublicState(room, socketId) {
     startedAt: room.startedAt,
     turnStartedAt: room.turnStartedAt,
     turnLimitSeconds: room.turnLimitSeconds,
+    turnRemainingMs: getTurnRemainingMs(room),
     lastAction: room.lastAction,
-    log: room.log.slice(-8),
+    log: room.log.slice(-12),
     animals: ANIMALS,
     board: room.board,
     availableTokens: room.availableTokens,
     tokensPerAnimal: room.tokensPerAnimal,
-    players: room.players.map(compactPlayer),
+    players: playersInTurnOrder.map(compactPlayer),
     myId: socketId,
     myHand: me ? me.hand : [],
     mySeat: me ? me.seat : null,
+    myAutoPlay: me ? me.autoPlay : false,
+    myAutoPlayTemporary: me ? me.autoPlayTemporary : false,
     isHost: socketId === room.hostId,
     error: null
   };
@@ -135,11 +150,36 @@ function emitRoom(room) {
   }
 }
 
-function pushLog(room, message) {
-  const stamp = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-  room.log.push(`${stamp} · ${message}`);
+function nowStamp() {
+  return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+}
+
+function pushTextLog(room, message) {
+  room.log.push({ id: logSeq += 1, type: 'text', stamp: nowStamp(), message });
   room.lastAction = message;
-  if (room.log.length > 40) room.log.shift();
+  if (room.log.length > 60) room.log.shift();
+}
+
+function pushMoveLog(room, player, card, tokenAnimalKey, auto = false) {
+  const tokenAnimal = animalByKey(tokenAnimalKey);
+  const cardAnimal = animalByKey(card.animal);
+  const message = `${player.name} วาง ${cardAnimal.thai} ${card.value} และหยิบ ${tokenAnimal.thai}${auto ? ' ด้วย Auto Play' : ''}`;
+  room.log.push({
+    id: logSeq += 1,
+    type: 'move',
+    stamp: nowStamp(),
+    playerName: player.name,
+    card,
+    tokenAnimalKey,
+    auto,
+    message
+  });
+  room.lastAction = message;
+  if (room.log.length > 60) room.log.shift();
+}
+
+function animalByKey(key) {
+  return ANIMALS.find((a) => a.key === key) || ANIMALS[0];
 }
 
 function createRoom(hostId, hostName) {
@@ -152,11 +192,14 @@ function createRoom(hostId, hostName) {
     maxPlayers: 6,
     startedAt: null,
     turnStartedAt: null,
-    turnLimitSeconds: 30,
+    turnLimitSeconds: DEFAULT_TURN_SECONDS,
+    timerHandle: null,
+    timerNonce: 0,
     currentPlayerId: null,
     currentPlayerIndex: 0,
     pendingTakePlayerId: null,
-    lastAction: 'ห้องพร้อมแล้ว ชวนเพื่อนเข้า LAN ได้เลย',
+    pendingCard: null,
+    lastAction: 'ห้องพร้อมแล้ว ชวนเพื่อนเข้าเล่นออนไลน์ได้เลย',
     log: [],
     board: initialBoard(),
     availableTokens: Object.fromEntries(ANIMALS.map((a) => [a.key, 0])),
@@ -165,7 +208,7 @@ function createRoom(hostId, hostName) {
   };
   const player = makePlayer(hostId, hostName, 1, true);
   room.players.push(player);
-  pushLog(room, `${player.name} สร้างห้อง ${code}`);
+  pushTextLog(room, `${player.name} สร้างห้อง ${code}`);
   rooms.set(code, room);
   socketToRoom.set(hostId, code);
   return room;
@@ -181,7 +224,9 @@ function makePlayer(socketId, name, seat, isHost = false) {
     totalScore: 0,
     roundScore: 0,
     hand: [],
-    tokens: emptyTokenSet()
+    tokens: emptyTokenSet(),
+    autoPlay: false,
+    autoPlayTemporary: false
   };
 }
 
@@ -195,6 +240,17 @@ function availableSeats(room) {
   const seats = [];
   for (let i = 1; i <= room.maxPlayers; i += 1) if (!used.has(i)) seats.push(i);
   return seats;
+}
+
+function shuffleSeats(room) {
+  const shuffled = shuffle(room.players);
+  shuffled.forEach((player, index) => {
+    player.seat = index + 1;
+  });
+  room.players = orderedPlayers(room);
+  room.currentPlayerIndex = 0;
+  const orderText = room.players.map((p, index) => `${index + 1}. ${p.name}`).join(' → ');
+  pushTextLog(room, `สุ่มลำดับการเล่นใหม่: ${orderText}`);
 }
 
 function joinRoom(socketId, roomCode, name) {
@@ -211,7 +267,7 @@ function joinRoom(socketId, roomCode, name) {
   const player = makePlayer(socketId, name, seat, false);
   room.players.push(player);
   socketToRoom.set(socketId, code);
-  pushLog(room, `${player.name} เข้าห้อง`);
+  pushTextLog(room, `${player.name} เข้าห้อง`);
   return { room };
 }
 
@@ -223,7 +279,7 @@ function leaveCurrentRoom(socketId) {
   const player = room.players.find((p) => p.id === socketId);
   if (player) {
     player.connected = false;
-    pushLog(room, `${player.name} ออกจากห้อง`);
+    pushTextLog(room, `${player.name} ออกจากห้อง`);
   }
 
   if (room.phase === 'lobby') {
@@ -231,15 +287,16 @@ function leaveCurrentRoom(socketId) {
     if (room.hostId === socketId && room.players.length > 0) {
       room.hostId = room.players[0].id;
       room.players[0].isHost = true;
-      pushLog(room, `${room.players[0].name} เป็น host คนใหม่`);
+      pushTextLog(room, `${room.players[0].name} เป็น host คนใหม่`);
     }
   }
 
   socketToRoom.delete(socketId);
   if (room.players.length === 0 || room.players.every((p) => !p.connected)) {
+    clearRoomTimer(room);
     rooms.delete(code);
   } else {
-    emitRoom(room);
+    afterRoomChange(room);
   }
 }
 
@@ -248,25 +305,33 @@ function startRound(room) {
   if (playerCount < 2) throw new Error('ต้องมีอย่างน้อย 2 คนถึงเริ่มเกมได้');
   if (playerCount > room.maxPlayers) throw new Error('ห้องนี้รองรับสูงสุด 6 คน');
 
+  if (room.roundNo === 0) shuffleSeats(room);
+
   room.phase = 'playing';
   room.roundNo += 1;
   room.board = initialBoard();
   room.pendingTakePlayerId = null;
+  room.pendingCard = null;
   room.tokensPerAnimal = playerCount <= 5 ? 5 : 6;
   room.availableTokens = Object.fromEntries(ANIMALS.map((a) => [a.key, room.tokensPerAnimal]));
 
   const deck = makeDeck();
   const handSize = Math.floor(deck.length / playerCount);
-  const shuffledPlayers = room.players.sort((a, b) => a.seat - b.seat);
-  for (const player of shuffledPlayers) {
+  room.players = orderedPlayers(room);
+  const sortedPlayers = room.players;
+  for (const player of sortedPlayers) {
     player.hand = [];
     player.tokens = emptyTokenSet();
     player.roundScore = 0;
+    if (player.autoPlayTemporary) {
+      player.autoPlay = false;
+      player.autoPlayTemporary = false;
+    }
   }
   for (let i = 0; i < handSize * playerCount; i += 1) {
-    shuffledPlayers[i % playerCount].hand.push(deck[i]);
+    sortedPlayers[i % playerCount].hand.push(deck[i]);
   }
-  for (const player of shuffledPlayers) {
+  for (const player of sortedPlayers) {
     player.hand.sort((a, b) => (a.animal.localeCompare(b.animal) || a.value - b.value));
   }
 
@@ -275,14 +340,14 @@ function startRound(room) {
   } else {
     room.currentPlayerIndex = (room.currentPlayerIndex + 1) % playerCount;
   }
-  room.currentPlayerId = shuffledPlayers[room.currentPlayerIndex].id;
+  room.currentPlayerId = sortedPlayers[room.currentPlayerIndex].id;
   room.startedAt = Date.now();
   room.turnStartedAt = Date.now();
   const extraNote = playerCount === 6 ? ' โหมด 6 คนใช้ house-rule: เพิ่มสัตว์เป็นชนิดละ 6 ตัว' : '';
-  pushLog(room, `เริ่มรอบ ${room.roundNo} แจกการ์ดคนละ ${handSize} ใบ.${extraNote}`);
+  pushTextLog(room, `เริ่มรอบ ${room.roundNo} แจกการ์ดคนละ ${handSize} ใบ.${extraNote}`);
 }
 
-function playCard(room, socketId, cardId) {
+function playCard(room, socketId, cardId, auto = false) {
   if (room.phase !== 'playing') throw new Error('ตอนนี้ยังวางการ์ดไม่ได้');
   if (room.currentPlayerId !== socketId) throw new Error('ยังไม่ใช่ตาของคุณ');
   const player = room.players.find((p) => p.id === socketId);
@@ -292,17 +357,18 @@ function playCard(room, socketId, cardId) {
   const [card] = player.hand.splice(index, 1);
   room.board[card.animal].push(card);
   room.pendingTakePlayerId = socketId;
+  room.pendingCard = { playerId: socketId, card, auto };
   room.phase = 'take';
   room.turnStartedAt = Date.now();
-  const animalName = ANIMALS.find((a) => a.key === card.animal)?.thai || card.animal;
-  pushLog(room, `${player.name} วางการ์ด ${animalName} ค่า ${card.value}`);
+  const animalName = animalByKey(card.animal).thai;
+  room.lastAction = `${player.name} วางการ์ด ${animalName} ค่า ${card.value}${auto ? ' ด้วย Auto Play' : ''}`;
 
   if (totalAvailableTokens(room) <= 0) {
     endRound(room, 'สัตว์ในกองกลางหมดแล้ว');
   }
 }
 
-function takeToken(room, socketId, animalKey) {
+function takeToken(room, socketId, animalKey, auto = false) {
   if (room.phase !== 'take') throw new Error('ตอนนี้ยังหยิบสัตว์ไม่ได้');
   if (room.pendingTakePlayerId !== socketId) throw new Error('ผู้เล่นที่วางการ์ดต้องเป็นคนหยิบสัตว์');
   if (!ANIMALS.some((a) => a.key === animalKey)) throw new Error('ชนิดสัตว์ไม่ถูกต้อง');
@@ -312,26 +378,40 @@ function takeToken(room, socketId, animalKey) {
   if (!player) throw new Error('ไม่พบผู้เล่น');
   player.tokens[animalKey] += 1;
   room.availableTokens[animalKey] -= 1;
-  const animalName = ANIMALS.find((a) => a.key === animalKey)?.thai || animalKey;
-  pushLog(room, `${player.name} หยิบ ${animalName}`);
+  const moveAuto = auto || Boolean(room.pendingCard?.auto) || player.autoPlay;
+  const playedCard = room.pendingCard?.card;
+  if (playedCard) pushMoveLog(room, player, playedCard, animalKey, moveAuto);
+  else pushTextLog(room, `${player.name} หยิบ ${animalByKey(animalKey).thai}${moveAuto ? ' ด้วย Auto Play' : ''}`);
+  room.pendingCard = null;
 
   const roundEndAnimal = ANIMALS.find((a) => room.board[a.key].length >= 6);
   if (roundEndAnimal) {
+    resetTemporaryAutoPlay(player);
     endRound(room, `${roundEndAnimal.thai} ถูกวางครบ 6 ใบ`);
     return;
   }
   if (totalAvailableTokens(room) <= 0) {
+    resetTemporaryAutoPlay(player);
     endRound(room, 'สัตว์ในกองกลางหมดแล้ว');
     return;
   }
   if (room.players.every((p) => p.hand.length === 0)) {
+    resetTemporaryAutoPlay(player);
     endRound(room, 'การ์ดทุกคนหมดมือ');
     return;
   }
 
+  resetTemporaryAutoPlay(player);
   room.phase = 'playing';
   room.pendingTakePlayerId = null;
   moveToNextPlayer(room);
+}
+
+function resetTemporaryAutoPlay(player) {
+  if (player.autoPlayTemporary) {
+    player.autoPlay = false;
+    player.autoPlayTemporary = false;
+  }
 }
 
 function moveToNextPlayer(room) {
@@ -369,21 +449,29 @@ function endRound(room, reason) {
     for (const animal of ANIMALS) score += (player.tokens[animal.key] || 0) * values[animal.key];
     player.roundScore = score;
     player.totalScore += score;
+    if (player.autoPlayTemporary) {
+      player.autoPlay = false;
+      player.autoPlayTemporary = false;
+    }
   }
   room.phase = 'round_end';
   room.pendingTakePlayerId = null;
+  room.pendingCard = null;
   room.currentPlayerId = null;
   room.turnStartedAt = null;
-  pushLog(room, `จบรอบ ${room.roundNo}: ${reason}`);
+  clearRoomTimer(room);
+  pushTextLog(room, `จบรอบ ${room.roundNo}: ${reason}`);
 }
 
 function resetRoom(room) {
+  clearRoomTimer(room);
   room.phase = 'lobby';
   room.roundNo = 0;
   room.currentPlayerId = null;
   room.turnStartedAt = null;
   room.currentPlayerIndex = 0;
   room.pendingTakePlayerId = null;
+  room.pendingCard = null;
   room.board = initialBoard();
   room.availableTokens = Object.fromEntries(ANIMALS.map((a) => [a.key, 0]));
   room.tokensPerAnimal = 0;
@@ -392,8 +480,94 @@ function resetRoom(room) {
     player.roundScore = 0;
     player.hand = [];
     player.tokens = emptyTokenSet();
+    player.autoPlay = false;
+    player.autoPlayTemporary = false;
   }
-  pushLog(room, 'รีเซ็ตเกม กลับสู่ lobby');
+  pushTextLog(room, 'รีเซ็ตเกม กลับสู่ lobby');
+}
+
+function actionPlayerId(room) {
+  if (room.phase === 'playing') return room.currentPlayerId;
+  if (room.phase === 'take') return room.pendingTakePlayerId;
+  return null;
+}
+
+function getTurnRemainingMs(room) {
+  if (!room || !actionPlayerId(room) || !room.turnStartedAt) return 0;
+  return Math.max(0, (room.turnLimitSeconds * 1000) - (Date.now() - room.turnStartedAt));
+}
+
+function clearRoomTimer(room) {
+  if (room.timerHandle) clearTimeout(room.timerHandle);
+  room.timerHandle = null;
+}
+
+function scheduleRoomTimer(room) {
+  clearRoomTimer(room);
+  const playerId = actionPlayerId(room);
+  if (!playerId) return;
+  const player = room.players.find((p) => p.id === playerId);
+  if (!player || player.autoPlay) return;
+  room.timerNonce += 1;
+  const nonce = room.timerNonce;
+  const delay = Math.max(1000, getTurnRemainingMs(room) || (room.turnLimitSeconds * 1000));
+  room.timerHandle = setTimeout(() => handleTurnTimeout(room.code, nonce), delay + 150);
+}
+
+function handleTurnTimeout(roomCode, nonce) {
+  const room = rooms.get(roomCode);
+  if (!room || room.timerNonce !== nonce) return;
+  const playerId = actionPlayerId(room);
+  if (!playerId) return;
+  const player = room.players.find((p) => p.id === playerId);
+  if (!player) return;
+  if (!player.autoPlay) {
+    player.autoPlay = true;
+    player.autoPlayTemporary = true;
+    pushTextLog(room, `⏱️ ${player.name} หมดเวลา เปิด Auto Play ชั่วคราว`);
+  }
+  afterRoomChange(room);
+}
+
+function selectLeastAvailableAnimal(room) {
+  return ANIMALS
+    .map((animal, index) => ({ animal, index, left: room.availableTokens[animal.key] || 0 }))
+    .filter((item) => item.left > 0)
+    .sort((a, b) => (a.left - b.left) || (a.index - b.index))[0]?.animal.key;
+}
+
+function resolveAutoActions(room) {
+  let guard = 0;
+  while ((room.phase === 'playing' || room.phase === 'take') && guard < 80) {
+    guard += 1;
+    if (room.phase === 'playing') {
+      const player = room.players.find((p) => p.id === room.currentPlayerId);
+      if (!player || !player.connected || player.hand.length === 0) break;
+      if (!player.autoPlay) break;
+      const card = player.hand[0];
+      playCard(room, player.id, card.id, true);
+      continue;
+    }
+
+    if (room.phase === 'take') {
+      const player = room.players.find((p) => p.id === room.pendingTakePlayerId);
+      if (!player || !player.connected) break;
+      if (!player.autoPlay) break;
+      const animalKey = selectLeastAvailableAnimal(room);
+      if (!animalKey) {
+        endRound(room, 'สัตว์ในกองกลางหมดแล้ว');
+        break;
+      }
+      takeToken(room, player.id, animalKey, true);
+      continue;
+    }
+  }
+}
+
+function afterRoomChange(room) {
+  resolveAutoActions(room);
+  emitRoom(room);
+  scheduleRoomTimer(room);
 }
 
 function roomOf(socketId) {
@@ -405,12 +579,31 @@ function emitError(socket, message) {
   socket.emit('toast', { type: 'error', message });
 }
 
+function clampTurnSeconds(value) {
+  const numeric = Number.parseInt(value, 10);
+  if (!Number.isFinite(numeric)) return DEFAULT_TURN_SECONDS;
+  return Math.max(MIN_TURN_SECONDS, Math.min(MAX_TURN_SECONDS, numeric));
+}
+
+function reorderHand(room, socketId, cardIds) {
+  const player = room.players.find((p) => p.id === socketId);
+  if (!player) throw new Error('ไม่พบผู้เล่น');
+  if (!Array.isArray(cardIds) || cardIds.length !== player.hand.length) throw new Error('ลำดับการ์ดไม่ถูกต้อง');
+  const current = new Map(player.hand.map((card) => [card.id, card]));
+  const uniqueIds = new Set(cardIds);
+  if (uniqueIds.size !== player.hand.length) throw new Error('ลำดับการ์ดซ้ำหรือขาดหาย');
+  for (const id of cardIds) {
+    if (!current.has(id)) throw new Error('พบการ์ดที่ไม่ได้อยู่ในมือ');
+  }
+  player.hand = cardIds.map((id) => current.get(id));
+}
+
 io.on('connection', (socket) => {
   socket.on('createRoom', ({ name }) => {
     leaveCurrentRoom(socket.id);
     const room = createRoom(socket.id, name);
     socket.join(room.code);
-    emitRoom(room);
+    afterRoomChange(room);
   });
 
   socket.on('joinRoom', ({ roomCode, name }) => {
@@ -420,7 +613,40 @@ io.on('connection', (socket) => {
       return;
     }
     socket.join(result.room.code);
-    emitRoom(result.room);
+    afterRoomChange(result.room);
+  });
+
+  socket.on('setTurnLimit', ({ seconds }) => {
+    const room = roomOf(socket.id);
+    if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
+    if (room.hostId !== socket.id) return emitError(socket, 'เฉพาะ host เท่านั้นที่ตั้งเวลาได้');
+    if (room.phase !== 'lobby') return emitError(socket, 'ตั้งเวลาได้ก่อนเริ่มเกมเท่านั้น');
+    room.turnLimitSeconds = clampTurnSeconds(seconds);
+    pushTextLog(room, `ตั้งเวลาต่อรอบเป็น ${room.turnLimitSeconds} วินาที`);
+    afterRoomChange(room);
+  });
+
+  socket.on('setAutoPlay', ({ enabled }) => {
+    const room = roomOf(socket.id);
+    if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
+    const player = room.players.find((p) => p.id === socket.id);
+    if (!player) return emitError(socket, 'ไม่พบผู้เล่น');
+    player.autoPlay = Boolean(enabled);
+    player.autoPlayTemporary = false;
+    pushTextLog(room, `${player.name} ${player.autoPlay ? 'เปิด' : 'ปิด'} Auto Play`);
+    afterRoomChange(room);
+  });
+
+  socket.on('reorderHand', ({ cardIds }) => {
+    const room = roomOf(socket.id);
+    if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
+    try {
+      reorderHand(room, socket.id, cardIds);
+      emitRoom(room);
+    } catch (error) {
+      emitError(socket, error.message);
+      emitRoom(room);
+    }
   });
 
   socket.on('startGame', () => {
@@ -429,7 +655,7 @@ io.on('connection', (socket) => {
     if (room.hostId !== socket.id) return emitError(socket, 'เฉพาะ host เท่านั้นที่เริ่มเกมได้');
     try {
       startRound(room);
-      emitRoom(room);
+      afterRoomChange(room);
     } catch (error) {
       emitError(socket, error.message);
     }
@@ -442,7 +668,7 @@ io.on('connection', (socket) => {
     if (room.phase !== 'round_end') return emitError(socket, 'ต้องจบรอบก่อน');
     try {
       startRound(room);
-      emitRoom(room);
+      afterRoomChange(room);
     } catch (error) {
       emitError(socket, error.message);
     }
@@ -453,7 +679,7 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
     if (room.hostId !== socket.id) return emitError(socket, 'เฉพาะ host เท่านั้นที่รีเซ็ตเกมได้');
     resetRoom(room);
-    emitRoom(room);
+    afterRoomChange(room);
   });
 
   socket.on('playCard', ({ cardId }) => {
@@ -461,7 +687,7 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
     try {
       playCard(room, socket.id, cardId);
-      emitRoom(room);
+      afterRoomChange(room);
     } catch (error) {
       emitError(socket, error.message);
       emitRoom(room);
@@ -473,7 +699,7 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
     try {
       takeToken(room, socket.id, animalKey);
-      emitRoom(room);
+      afterRoomChange(room);
     } catch (error) {
       emitError(socket, error.message);
       emitRoom(room);

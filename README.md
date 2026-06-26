@@ -81,3 +81,10 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - เพิ่ม turn timer 30 วินาทีที่กึ่งกลางด้านบนเมื่อถึงตาผู้เล่น
 - ถ้าผู้เล่นสลับไปแท็บอื่น browser title จะกระพริบเมื่อถึงตาของตัวเอง
 - คงรูปแบบไพ่ในมือแบบเดิม และปรับกองไพ่กลาง/คะแนนสดด้านซ้ายให้อ่านง่ายขึ้น
+
+
+## Latest update
+
+- Round scoreboard modal highlights Top 1-2-3 after each round.
+- Seats are shuffled once when the game starts and the left player panel follows that turn order.
+- Player cards are compacted to fit 6 players more comfortably.
