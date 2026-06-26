@@ -15,35 +15,25 @@
   <div class="ambient ambient-three"></div>
 
   <main class="app-shell">
-    <section id="welcome" class="welcome-card glass-card">
-      <div class="brand-row">
-        <div class="brand-badge">🦁</div>
-        <div>
-          <p class="eyebrow">LAN Board Game</p>
-          <h1>Botswana Safari</h1>
-        </div>
+    <section id="welcome" class="welcome-card glass-card simple-welcome">
+      <div class="welcome-animals" aria-hidden="true">
+        <span>🦁</span><span>🐘</span><span>🦒</span><span>🦓</span><span>🦛</span><span>🦏</span>
       </div>
 
-      <p class="intro">เว็บเล่นบอร์ดเกมสไตล์ Botswana สำหรับเล่นกับเพื่อนในวง LAN เดียวกัน มีการ์ดสัตว์ มือการ์ด ระบบวางการ์ด หยิบสัตว์ และนับคะแนนท้ายรอบ</p>
-
-      <div class="form-grid">
+      <div class="form-grid welcome-form">
         <label>
           ชื่อผู้เล่น
-          <input id="playerName" maxlength="22" placeholder="เช่น Som, Bluebell, Engineer" />
+          <input id="playerName" maxlength="22" placeholder="ใส่ชื่อของคุณ" />
         </label>
         <label>
           Room Code
-          <input id="roomCode" maxlength="6" placeholder="ใส่เมื่อ join ห้อง" />
+          <input id="roomCode" maxlength="6" placeholder="ใส่รหัสห้อง" />
         </label>
       </div>
 
-      <div class="button-row">
-        <button id="createRoomBtn" class="primary-btn">สร้างห้องใหม่</button>
-        <button id="joinRoomBtn" class="secondary-btn">เข้าห้อง</button>
-      </div>
-
-      <div class="howto-mini">
-        <span>วิธีเล่น LAN:</span> ให้คนหนึ่งเปิด server แล้วส่งลิงก์ <strong>http://IP-เครื่อง-host:3000</strong> ให้เพื่อน
+      <div class="button-row welcome-actions">
+        <button id="joinRoomBtn" class="primary-btn">เข้าร่วม</button>
+        <button id="createRoomBtn" class="secondary-btn">สร้างห้อง</button>
       </div>
     </section>
 
@@ -88,7 +78,7 @@
         </div>
         <div>
           <span class="label">กติกา</span>
-          <strong id="variantText">2–6 Players</strong>
+          <strong id="variantText">5 สัตว์ · 30s</strong>
         </div>
       </section>
 
@@ -96,7 +86,7 @@
         <aside class="players-panel glass-card">
           <div class="panel-title">
             <span>ผู้เล่น</span>
-            <small id="playerCountText">0/6</small>
+            <small id="playerCountText">0/7</small>
           </div>
           <div id="playersList" class="players-list"></div>
         </aside>

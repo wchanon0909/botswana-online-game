@@ -137,7 +137,7 @@ function render() {
   $('phaseText').textContent = phaseLabel(state.phase);
   $('turnText').textContent = state.currentPlayerName || (state.phase === 'lobby' ? 'รอเริ่มเกม' : '-');
   $('roundText').textContent = state.roundNo || 0;
-  $('variantText').textContent = `${state.players.length === 6 ? '6P House-rule' : 'Classic style'} · ${state.turnLimitSeconds || 30}s`;
+  $('variantText').textContent = `${state.animals.length} สัตว์ · ${state.turnLimitSeconds || 30}s`;
   $('playerCountText').textContent = `${state.players.length}/${state.maxPlayers}`;
   $('lastActionText').textContent = state.lastAction || 'พร้อมเล่น';
 
@@ -277,9 +277,7 @@ function renderPlayers() {
     const previousTotalScore = state.phase === 'round_end'
       ? Math.max(0, player.totalScore - player.roundScore)
       : player.totalScore;
-    const currentTotalScore = state.phase === 'round_end'
-      ? player.totalScore
-      : previousTotalScore + liveRoundScore;
+    const currentRoundScore = state.phase === 'round_end' ? player.roundScore : liveRoundScore;
     const tokenText = state.animals
       .map((a) => {
         const count = player.tokens[a.key] || 0;
@@ -295,9 +293,9 @@ function renderPlayers() {
         <span class="badge">${player.isHost ? 'Host' : `Seat ${player.seat}`}</span>
       </div>
       <div class="player-stat-grid">
-        <div><span>การ์ดในมือ</span><strong>${player.handCount}</strong></div>
-        <div><span>รวมรอบก่อน</span><strong>${previousTotalScore}</strong></div>
-        <div><span>รวมปัจจุบัน</span><strong>${currentTotalScore}</strong></div>
+        <div><span>การ์ด</span><strong>${player.handCount}</strong></div>
+        <div><span>คะแนนก่อน</span><strong>${previousTotalScore}</strong></div>
+        <div><span>รอบปัจจุบัน</span><strong>${currentRoundScore}</strong></div>
       </div>
       <div class="player-tokens">${tokenText || '<span class="token-pill empty">ยังไม่มีสัตว์</span>'}</div>
     `;
@@ -442,6 +440,8 @@ function renderLog() {
   log.innerHTML = state.log.slice().reverse().map((entry) => {
     if (typeof entry === 'string') return `<div class="log-entry">${escapeHtml(entry)}</div>`;
     if (entry.type === 'move') return moveLogHtml(entry);
+    if (entry.type === 'card') return cardLogHtml(entry);
+    if (entry.type === 'take') return takeLogHtml(entry);
     return `<div class="log-entry text-log"><span class="log-stamp">${escapeHtml(entry.stamp || '')}</span><span class="log-message">${escapeHtml(entry.message || '')}</span></div>`;
   }).join('');
 }
@@ -457,6 +457,35 @@ function moveLogHtml(entry) {
         <span>${cardAnimal.emoji}</span><b>${entry.card.value}</b>
       </span>
       <span class="feed-arrow">➜</span>
+      <span class="feed-token">${tokenAnimal.emoji}</span>
+      ${entry.auto ? '<span class="feed-auto">AUTO</span>' : ''}
+    </div>
+  `;
+}
+
+
+function cardLogHtml(entry) {
+  const cardAnimal = animalMeta(entry.card.animal);
+  return `
+    <div class="log-entry kill-feed card-only">
+      <span class="log-stamp">${escapeHtml(entry.stamp || '')}</span>
+      <strong class="feed-name">${escapeHtml(entry.playerName)}</strong>
+      <span class="feed-action">วาง</span>
+      <span class="feed-card" style="background:${cardBackground(entry.card.animal)}">
+        <span>${cardAnimal.emoji}</span><b>${entry.card.value}</b>
+      </span>
+      ${entry.auto ? '<span class="feed-auto">AUTO</span>' : ''}
+    </div>
+  `;
+}
+
+function takeLogHtml(entry) {
+  const tokenAnimal = animalMeta(entry.tokenAnimalKey);
+  return `
+    <div class="log-entry kill-feed take-only">
+      <span class="log-stamp">${escapeHtml(entry.stamp || '')}</span>
+      <strong class="feed-name">${escapeHtml(entry.playerName)}</strong>
+      <span class="feed-action">หยิบ</span>
       <span class="feed-token">${tokenAnimal.emoji}</span>
       ${entry.auto ? '<span class="feed-auto">AUTO</span>' : ''}
     </div>
@@ -542,7 +571,8 @@ function cardBackground(animalKey) {
     elephant: 'linear-gradient(145deg, #dff9fb, #a8dadc)',
     giraffe: 'linear-gradient(145deg, #ffe8a3, #e9c46a)',
     zebra: 'linear-gradient(145deg, #ffffff, #d8dee9)',
-    hippo: 'linear-gradient(145deg, #e8ddff, #b8a1ff)'
+    hippo: 'linear-gradient(145deg, #e8ddff, #b8a1ff)',
+    rhino: 'linear-gradient(145deg, #eef3f7, #b7c4cf)'
   };
   return gradients[animalKey] || 'linear-gradient(145deg, #fff, #ddd)';
 }

@@ -95,3 +95,12 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Card order updates no longer broadcast a full refresh to other players.
 - Player cards show only hand count, previous total, current total, and animal tokens.
 - Added local face-down / face-up card toggle.
+
+
+## Latest update notes
+
+- Default game mode uses 5 animal types for up to 5 players.
+- When the room has 6 or 7 players, the game automatically adds Rhino as the 6th animal type.
+- Player cards show only: hand count, previous total score, current round realtime score, and collected animal tokens.
+- Game Log records card placement immediately, then records the selected animal token as a separate feed entry.
+- The welcome screen is simplified to player name, room code, Join, Create Room, and animated animal icons.
