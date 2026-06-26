@@ -1,9 +1,7 @@
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY server.js ./
-COPY public ./public
-ENV PORT=3000
-EXPOSE 3000
-CMD ["npm", "start"]
+services:
+  botswana-lan-game:
+    build: .
+    container_name: botswana-lan-game
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
