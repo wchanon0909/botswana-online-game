@@ -6,6 +6,8 @@ let timerInterval = null;
 let titleFlashInterval = null;
 let originalTitle = document.title;
 let draggedCardId = null;
+let lastHandRenderSignature = '';
+let lastHandInteractivitySignature = '';
 let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDown') === 'true';
 let lastAnimatedMoveId = null;
 
@@ -38,6 +40,17 @@ const chatForm = $('chatForm');
 const chatInput = $('chatInput');
 const chatMessages = $('chatMessages');
 const rankingTrain = $('rankingTrain');
+
+const fallbackAnimals = {
+  lion: { key: 'lion', name: 'Lion', thai: 'สิงโต', emoji: '🦁' },
+  elephant: { key: 'elephant', name: 'Elephant', thai: 'ช้าง', emoji: '🐘' },
+  giraffe: { key: 'giraffe', name: 'Giraffe', thai: 'ยีราฟ', emoji: '🦒' },
+  zebra: { key: 'zebra', name: 'Zebra', thai: 'ม้าลาย', emoji: '🦓' },
+  hippo: { key: 'hippo', name: 'Hippo', thai: 'ฮิปโป', emoji: '🦛' },
+  rhino: { key: 'rhino', name: 'Rhino', thai: 'แรด', emoji: '🦏' },
+  crocodile: { key: 'crocodile', name: 'Crocodile', thai: 'จระเข้', emoji: '🐊' },
+  monkey: { key: 'monkey', name: 'Monkey', thai: 'ลิง', emoji: '🐒' }
+};
 
 const savedName = localStorage.getItem('botswanaPlayerName');
 if (savedName) playerName.value = savedName;
@@ -187,7 +200,7 @@ function phaseLabel(phase) {
 }
 
 function animalMeta(key) {
-  return state.animals.find((a) => a.key === key);
+  return state.animals.find((a) => a.key === key) || fallbackAnimals[key] || { key, name: key || 'Animal', thai: key || 'Animal', emoji: '🐾' };
 }
 
 function isMyActionTurn() {
@@ -380,62 +393,117 @@ function renderBoard() {
   }
 }
 
+function handSignatureFromState() {
+  if (!state || !Array.isArray(state.myHand)) return `empty|face:${cardsFaceDown ? 'down' : 'up'}`;
+  return `${state.myHand.map((card) => card.id).join('|')}|face:${cardsFaceDown ? 'down' : 'up'}`;
+}
+
+function handSignatureFromDom() {
+  const hand = $('myHand');
+  const ids = [...hand.querySelectorAll('.hand-card')].map((el) => el.dataset.cardId).filter(Boolean);
+  return `${ids.join('|')}|face:${cardsFaceDown ? 'down' : 'up'}`;
+}
+
+function isTouchLikeDevice() {
+  return window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window;
+}
+
 function renderHand() {
   const hand = $('myHand');
-  hand.innerHTML = '';
   const isMyTurn = state.phase === 'playing' && state.currentPlayerId === state.myId;
   $('handHint').textContent = isMyTurn
-    ? 'ถึงตาคุณแล้ว คลิกการ์ดเพื่อวาง หรือเปิด Auto Play'
-    : 'ลากการ์ดเพื่อเรียงลำดับได้ตลอดเวลา';
+    ? 'ถึงตาคุณแล้ว แตะ/คลิกการ์ดเพื่อวาง'
+    : 'เรียงการ์ดได้บนคอมพิวเตอร์ · มือถือแตะการ์ดได้เสถียรขึ้น';
 
   hand.ondragover = handleHandDragOver;
   hand.ondrop = handleHandDrop;
+
+  const signature = handSignatureFromState();
+  const hasSameCards = signature === lastHandRenderSignature && hand.querySelectorAll('.hand-card').length === state.myHand.length;
+  if (hasSameCards) {
+    updateHandInteractivity(hand, isMyTurn);
+    return;
+  }
+
+  lastHandRenderSignature = signature;
+  lastHandInteractivitySignature = '';
+  hand.innerHTML = '';
 
   if (!state.myHand.length) {
     hand.innerHTML = '<div class="empty-state">ไม่มีการ์ดในมือ</div>';
     return;
   }
 
-  state.myHand.forEach((card, index) => {
-    const animal = animalMeta(card.animal);
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = `hand-card ${isMyTurn ? 'playable' : 'not-playable'}`;
-    el.dataset.cardId = card.id;
-    el.draggable = true;
-    el.style.background = cardsFaceDown ? '' : cardBackground(animal.key);
-    el.style.animationDelay = `${Math.min(index * 0.035, 0.5)}s`;
-    el.setAttribute('aria-disabled', String(!isMyTurn));
-    el.title = cardsFaceDown ? 'การ์ดถูกคว่ำอยู่: ลากเพื่อเรียงลำดับ หรือคลิกเพื่อวางเมื่อถึงตา' : 'ลากเพื่อเรียงลำดับการ์ด';
-    if (cardsFaceDown) {
-      el.classList.add('face-down');
-      el.innerHTML = `
-        <span class="card-back-icon">🦁</span>
-        <span class="card-back-text">SAFARI</span>
-      `;
-    } else {
-      el.innerHTML = `
-        <span class="card-label">${animal.name}</span>
-        <span class="card-emoji">${animal.emoji}</span>
-        <span class="card-value">${card.value}</span>
-      `;
-    }
-    el.addEventListener('click', () => {
-      if (!isMyTurn) return;
-      socket.emit('playCard', { cardId: card.id });
-    });
-    el.addEventListener('dragstart', (event) => {
-      draggedCardId = card.id;
-      el.classList.add('dragging');
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', card.id);
-    });
-    el.addEventListener('dragend', () => {
-      draggedCardId = null;
-      el.classList.remove('dragging');
-      emitCurrentHandOrder();
-    });
+  state.myHand.forEach((card) => {
+    const el = createHandCardElement(card, isMyTurn);
     hand.appendChild(el);
+  });
+  updateHandInteractivity(hand, isMyTurn);
+}
+
+function createHandCardElement(card, isMyTurn) {
+  const animal = animalMeta(card.animal);
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = `hand-card ${isMyTurn ? 'playable' : 'not-playable'}`;
+  el.dataset.cardId = card.id;
+  el.dataset.cardAnimal = card.animal;
+  el.dataset.cardValue = String(card.value);
+  el.draggable = !isTouchLikeDevice();
+  el.style.background = cardsFaceDown ? '' : cardBackground(animal.key);
+  el.setAttribute('aria-disabled', String(!isMyTurn));
+  el.title = cardsFaceDown ? 'การ์ดถูกคว่ำอยู่: แตะเพื่อวางเมื่อถึงตา' : 'แตะเพื่อวางเมื่อถึงตา';
+
+  renderHandCardFace(el, card, animal);
+
+  el.addEventListener('click', () => {
+    if (!state || !(state.phase === 'playing' && state.currentPlayerId === state.myId)) return;
+    socket.emit('playCard', { cardId: card.id });
+  });
+  el.addEventListener('dragstart', (event) => {
+    if (isTouchLikeDevice()) {
+      event.preventDefault();
+      return;
+    }
+    draggedCardId = card.id;
+    el.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', card.id);
+  });
+  el.addEventListener('dragend', () => {
+    draggedCardId = null;
+    el.classList.remove('dragging');
+    emitCurrentHandOrder();
+  });
+  return el;
+}
+
+function renderHandCardFace(el, card, animal) {
+  el.classList.toggle('face-down', cardsFaceDown);
+  el.style.background = cardsFaceDown ? '' : cardBackground(animal.key);
+  if (cardsFaceDown) {
+    el.innerHTML = `
+      <span class="card-back-icon">🦁</span>
+      <span class="card-back-text">SAFARI</span>
+    `;
+  } else {
+    el.innerHTML = `
+      <span class="card-label">${animal.name}</span>
+      <span class="card-emoji">${animal.emoji}</span>
+      <span class="card-value">${card.value}</span>
+    `;
+  }
+}
+
+function updateHandInteractivity(hand, isMyTurn) {
+  const signature = `${isMyTurn ? 'turn' : 'wait'}|${cardsFaceDown ? 'down' : 'up'}|${state.currentPlayerId || ''}|${state.phase}`;
+  if (signature === lastHandInteractivitySignature) return;
+  lastHandInteractivitySignature = signature;
+  [...hand.querySelectorAll('.hand-card')].forEach((el) => {
+    el.classList.toggle('playable', isMyTurn);
+    el.classList.toggle('not-playable', !isMyTurn);
+    el.setAttribute('aria-disabled', String(!isMyTurn));
+    el.draggable = !isTouchLikeDevice();
   });
 }
 
@@ -469,7 +537,10 @@ function getDragAfterElement(container, x) {
 function emitCurrentHandOrder() {
   const hand = $('myHand');
   const cardIds = [...hand.querySelectorAll('.hand-card')].map((el) => el.dataset.cardId).filter(Boolean);
-  if (cardIds.length === state.myHand.length) socket.emit('reorderHand', { cardIds });
+  if (cardIds.length === state.myHand.length) {
+    lastHandRenderSignature = handSignatureFromDom();
+    socket.emit('reorderHand', { cardIds });
+  }
 }
 
 function renderChat() {
@@ -669,7 +740,9 @@ function cardBackground(animalKey) {
     giraffe: 'linear-gradient(145deg, #ffe8a3, #e9c46a)',
     zebra: 'linear-gradient(145deg, #ffffff, #d8dee9)',
     hippo: 'linear-gradient(145deg, #e8ddff, #b8a1ff)',
-    rhino: 'linear-gradient(145deg, #eef3f7, #b7c4cf)'
+    rhino: 'linear-gradient(145deg, #eef3f7, #b7c4cf)',
+    crocodile: 'linear-gradient(145deg, #d9f99d, #80c783)',
+    monkey: 'linear-gradient(145deg, #f6d7b0, #d6a06b)'
   };
   return gradients[animalKey] || 'linear-gradient(145deg, #fff, #ddd)';
 }

@@ -125,3 +125,10 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Safari Board animal order is shuffled each round.
 - Chat area shows at least four visible lines.
 - Game Log spacing adjusted to prevent overlap.
+
+
+## Mobile stability + 10 players update
+- Stable hand rendering: hand cards are not rebuilt on every room/chat/log update.
+- Mobile hand animations and HTML drag are disabled to make tapping cards reliable.
+- Max players increased to 10.
+- Rule scaling: 2-5 players = 5 animals/cards 0-5; 6 = 6 animals/0-5; 7 = 6 animals/0-6; 8 = 7 animals/0-6; 9 = 7 animals/0-7; 10 = 8 animals/0-7. Tokens remain 5 per animal.

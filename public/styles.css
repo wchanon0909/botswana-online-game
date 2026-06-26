@@ -1616,3 +1616,58 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
     max-height: 180px;
   }
 }
+
+
+/* Critical mobile stability fix: hand cards no longer re-animate on room updates */
+.hand-card {
+  animation: none !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.hand-card.playable {
+  cursor: pointer;
+}
+
+.hand-card.not-playable {
+  cursor: default;
+}
+
+.hand {
+  contain: layout paint;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.hand-panel {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@media (max-width: 760px) {
+  .hand-panel {
+    position: relative !important;
+    bottom: auto !important;
+    z-index: 4;
+    margin-bottom: 8px;
+  }
+
+  .hand {
+    min-height: 128px;
+    padding-bottom: 10px;
+  }
+
+  .hand-card {
+    width: 82px;
+    height: 112px;
+  }
+
+  .hand-card.playable:hover {
+    transform: none;
+  }
+
+  .hand-card.playable:active {
+    transform: scale(0.97);
+  }
+}

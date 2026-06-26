@@ -10,12 +10,17 @@ const DEFAULT_TURN_SECONDS = 30;
 const MIN_TURN_SECONDS = 5;
 const MAX_TURN_SECONDS = 180;
 const DEFAULT_PLAYER_LIMIT = 5;
-const MAX_PLAYERS = 7;
-const BASE_ANIMAL_COUNT = 5;
-const EXTRA_ANIMAL_COUNT = 6;
-const BASE_CARD_MAX_VALUE = 5;
-const SEVEN_PLAYER_CARD_MAX_VALUE = 6;
+const MAX_PLAYERS = 10;
 const TOKENS_PER_ANIMAL = 5;
+
+const PLAYER_COUNT_RULES = [
+  { maxPlayers: 5, animalCount: 5, cardMaxValue: 5 },
+  { maxPlayers: 6, animalCount: 6, cardMaxValue: 5 },
+  { maxPlayers: 7, animalCount: 6, cardMaxValue: 6 },
+  { maxPlayers: 8, animalCount: 7, cardMaxValue: 6 },
+  { maxPlayers: 9, animalCount: 7, cardMaxValue: 7 },
+  { maxPlayers: 10, animalCount: 8, cardMaxValue: 7 }
+];
 
 const app = express();
 const server = http.createServer(app);
@@ -51,7 +56,9 @@ const ANIMALS = [
   { key: 'giraffe', name: 'Giraffe', thai: 'ยีราฟ', emoji: '🦒', accent: '#e9c46a' },
   { key: 'zebra', name: 'Zebra', thai: 'ม้าลาย', emoji: '🦓', accent: '#e5e5e5' },
   { key: 'hippo', name: 'Hippo', thai: 'ฮิปโป', emoji: '🦛', accent: '#b8a1ff' },
-  { key: 'rhino', name: 'Rhino', thai: 'แรด', emoji: '🦏', accent: '#b7c4cf' }
+  { key: 'rhino', name: 'Rhino', thai: 'แรด', emoji: '🦏', accent: '#b7c4cf' },
+  { key: 'crocodile', name: 'Crocodile', thai: 'จระเข้', emoji: '🐊', accent: '#80c783' },
+  { key: 'monkey', name: 'Monkey', thai: 'ลิง', emoji: '🐒', accent: '#d6a06b' }
 ];
 
 const rooms = new Map();
@@ -80,13 +87,18 @@ function shuffle(array) {
   return cloned;
 }
 
+function formatRuleForPlayerCount(playerCount) {
+  const count = Math.max(1, Number(playerCount) || 1);
+  return PLAYER_COUNT_RULES.find((rule) => count <= rule.maxPlayers) || PLAYER_COUNT_RULES[PLAYER_COUNT_RULES.length - 1];
+}
+
 function activeAnimalsForPlayerCount(playerCount) {
-  const count = playerCount > DEFAULT_PLAYER_LIMIT ? EXTRA_ANIMAL_COUNT : BASE_ANIMAL_COUNT;
-  return ANIMALS.slice(0, count);
+  const rule = formatRuleForPlayerCount(playerCount);
+  return ANIMALS.slice(0, rule.animalCount);
 }
 
 function cardMaxForPlayerCount(playerCount) {
-  return playerCount >= 7 ? SEVEN_PLAYER_CARD_MAX_VALUE : BASE_CARD_MAX_VALUE;
+  return formatRuleForPlayerCount(playerCount).cardMaxValue;
 }
 
 function gameFormatForPlayerCount(playerCount) {
@@ -122,7 +134,7 @@ function syncLobbyAnimals(room) {
   room.availableTokens = Object.fromEntries(room.animals.map((a) => [a.key, 0]));
 }
 
-function makeDeck(animals = ANIMALS, cardMaxValue = BASE_CARD_MAX_VALUE) {
+function makeDeck(animals = ANIMALS, cardMaxValue = 5) {
   const deck = [];
   for (const animal of animals) {
     for (let value = 0; value <= cardMaxValue; value += 1) {
@@ -269,6 +281,7 @@ function animalByKey(key) {
 
 function createRoom(hostId, hostName) {
   const code = uniqueCode();
+  const initialAnimals = shuffle(activeAnimalsForPlayerCount(1));
   const room = {
     code,
     hostId,
@@ -289,11 +302,11 @@ function createRoom(hostId, hostName) {
     chat: [],
     roundResult: null,
     lastTokenMove: null,
-    animals: shuffle(activeAnimalsForPlayerCount(1)),
-    cardMaxValue: BASE_CARD_MAX_VALUE,
-    cardsPerAnimal: BASE_CARD_MAX_VALUE + 1,
-    board: initialBoard(activeAnimalsForPlayerCount(1)),
-    availableTokens: Object.fromEntries(activeAnimalsForPlayerCount(1).map((a) => [a.key, 0])),
+    animals: initialAnimals,
+    cardMaxValue: 5,
+    cardsPerAnimal: 6,
+    board: initialBoard(initialAnimals),
+    availableTokens: Object.fromEntries(initialAnimals.map((a) => [a.key, 0])),
     tokensPerAnimal: 0,
     players: []
   };
@@ -349,7 +362,7 @@ function joinRoom(socketId, roomCode, name) {
   const room = rooms.get(code);
   if (!room) return { error: 'ไม่พบห้องนี้ ลองตรวจ room code อีกครั้ง' };
   if (room.phase !== 'lobby') return { error: 'เกมเริ่มแล้ว ห้องนี้ยังไม่เปิดรับผู้เล่นใหม่' };
-  if (room.players.length >= room.maxPlayers) return { error: 'ห้องเต็มแล้ว รองรับสูงสุด 7 คน' };
+  if (room.players.length >= room.maxPlayers) return { error: 'ห้องเต็มแล้ว รองรับสูงสุด 10 คน' };
 
   const oldCode = socketToRoom.get(socketId);
   if (oldCode && oldCode !== code) leaveCurrentRoom(socketId);
@@ -396,7 +409,7 @@ function leaveCurrentRoom(socketId) {
 function startRound(room) {
   const playerCount = room.players.length;
   if (playerCount < 2) throw new Error('ต้องมีอย่างน้อย 2 คนถึงเริ่มเกมได้');
-  if (playerCount > room.maxPlayers) throw new Error('ห้องนี้รองรับสูงสุด 7 คน');
+  if (playerCount > room.maxPlayers) throw new Error('ห้องนี้รองรับสูงสุด 10 คน');
 
   if (room.roundNo === 0) shuffleSeats(room);
 
@@ -480,10 +493,10 @@ function takeToken(room, socketId, animalKey, auto = false) {
   room.lastTokenMove = { id: `${Date.now()}-${player.id}-${animalKey}-${room.roundNo}`, playerId: player.id, animalKey };
   room.pendingCard = null;
 
-  const roundEndAnimal = roomAnimals(room).find((a) => room.board[a.key].length >= (room.cardsPerAnimal || BASE_CARD_MAX_VALUE + 1));
+  const roundEndAnimal = roomAnimals(room).find((a) => room.board[a.key].length >= (room.cardsPerAnimal || (room.cardMaxValue || 5) + 1));
   if (roundEndAnimal) {
     resetTemporaryAutoPlay(player);
-    endRound(room, `${roundEndAnimal.thai} ถูกวางครบ ${room.cardsPerAnimal || BASE_CARD_MAX_VALUE + 1} ใบ`);
+    endRound(room, `${roundEndAnimal.thai} ถูกวางครบ ${room.cardsPerAnimal || (room.cardMaxValue || 5) + 1} ใบ`);
     return;
   }
   if (totalAvailableTokens(room) <= 0) {
