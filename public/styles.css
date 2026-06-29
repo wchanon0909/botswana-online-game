@@ -1671,3 +1671,288 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
     transform: scale(0.97);
   }
 }
+
+
+/* Update: emoji reactions + cleaner module proportions */
+.app-shell {
+  width: min(100% - 24px, 1680px);
+}
+
+.topbar,
+.status-strip,
+.ranking-train,
+.hand-panel,
+.players-panel,
+.board-panel,
+.log-panel {
+  border-radius: 22px;
+}
+
+.topbar,
+.status-strip,
+.hand-panel {
+  padding: 14px 16px;
+}
+
+.status-strip {
+  gap: 10px;
+}
+
+.status-strip > div {
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.status-strip .label {
+  font-size: 11px;
+}
+
+.status-strip strong {
+  font-size: 13px;
+}
+
+.ranking-train {
+  min-height: 50px;
+  padding: 8px 12px;
+}
+
+.main-stage {
+  grid-template-columns: minmax(250px, 300px) minmax(600px, 1fr) minmax(290px, 350px);
+  gap: 14px;
+  height: clamp(540px, calc(100dvh - 292px), 760px);
+}
+
+.players-panel,
+.board-panel,
+.log-panel {
+  padding: 14px;
+}
+
+.players-list,
+.animal-rows,
+.game-log {
+  gap: 8px;
+}
+
+.compact-player-card {
+  position: relative;
+  min-height: 76px;
+  padding: 8px 10px;
+}
+
+.emoji-bubble {
+  position: absolute;
+  right: 8px;
+  top: -18px;
+  z-index: 2;
+  min-width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(36, 49, 42, 0.12);
+  box-shadow: 0 14px 32px rgba(36, 49, 42, 0.18);
+  font-size: 25px;
+  animation: reactionPop 4.2s ease both;
+  pointer-events: none;
+}
+
+@keyframes reactionPop {
+  0% { transform: translateY(10px) scale(0.4); opacity: 0; }
+  10% { transform: translateY(-2px) scale(1.08); opacity: 1; }
+  18%, 78% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-14px) scale(0.88); opacity: 0; }
+}
+
+.emoji-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 9px 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.44);
+  border: 1px solid rgba(36, 49, 42, 0.08);
+}
+
+.emoji-panel-title {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 1000;
+  white-space: nowrap;
+}
+
+.emoji-dock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.emoji-dock button {
+  width: 38px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 6px 14px rgba(36, 49, 42, 0.08);
+  font-size: 21px;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+  touch-action: manipulation;
+}
+
+.emoji-dock button:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.emoji-dock button:active {
+  transform: scale(0.94);
+}
+
+/* Retire chat layout completely in this version. */
+.chat-panel,
+.chat-messages,
+.chat-form {
+  display: none !important;
+}
+
+.animal-row {
+  grid-template-columns: minmax(120px, 150px) minmax(0, 1fr) 82px;
+  padding: 10px;
+  gap: 10px;
+}
+
+.current-value,
+.token-count,
+.log-entry {
+  font-size: 12px;
+}
+
+.game-log {
+  align-content: start;
+}
+
+.kill-feed,
+.kill-feed.card-only,
+.kill-feed.take-only {
+  min-height: 50px;
+}
+
+.hand-panel {
+  margin-top: 12px;
+}
+
+.hand {
+  min-height: 134px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+@media (max-width: 1320px) and (min-width: 1181px) {
+  .main-stage {
+    grid-template-columns: minmax(230px, 270px) minmax(500px, 1fr) minmax(260px, 310px);
+    gap: 10px;
+  }
+
+  .players-panel,
+  .board-panel,
+  .log-panel {
+    padding: 12px;
+  }
+
+  .animal-row {
+    grid-template-columns: 118px minmax(0, 1fr) 72px;
+  }
+
+  .animal-emoji { font-size: 25px; }
+  .board-card { width: 48px; height: 66px; }
+  .big-token { width: 44px; height: 44px; font-size: 24px; }
+}
+
+@media (max-width: 1180px) {
+  .main-stage {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .players-panel,
+  .board-panel,
+  .log-panel {
+    max-height: none;
+  }
+
+  .players-list,
+  .animal-rows,
+  .game-log {
+    max-height: 440px;
+  }
+
+  .emoji-panel {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    width: min(100% - 12px, 1680px);
+  }
+
+  .topbar,
+  .status-strip,
+  .ranking-train,
+  .hand-panel,
+  .players-panel,
+  .board-panel,
+  .log-panel {
+    border-radius: 18px;
+  }
+
+  .status-strip,
+  .top-actions,
+  .emoji-dock,
+  .hand-controls {
+    gap: 7px;
+  }
+
+  .main-stage {
+    gap: 10px;
+  }
+
+  .emoji-panel {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+
+  .emoji-dock button {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    font-size: 20px;
+  }
+
+  .animal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .players-list,
+  .animal-rows,
+  .game-log {
+    max-height: 360px;
+  }
+
+  .emoji-bubble {
+    right: 6px;
+    top: -14px;
+    min-width: 36px;
+    height: 36px;
+    border-radius: 14px;
+    font-size: 22px;
+  }
+}

@@ -132,3 +132,9 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Mobile hand animations and HTML drag are disabled to make tapping cards reliable.
 - Max players increased to 10.
 - Rule scaling: 2-5 players = 5 animals/cards 0-5; 6 = 6 animals/0-5; 7 = 6 animals/0-6; 8 = 7 animals/0-6; 9 = 7 animals/0-7; 10 = 8 animals/0-7. Tokens remain 5 per animal.
+
+
+## Latest update: emoji reactions and randomized animal pool
+- Replaced real-time chat with quick emoji reactions. Reactions appear on the player's card for about 4 seconds.
+- Safari animal types are now randomly selected from a larger animal pool according to the active player-count rule.
+- Adjusted module proportions and spacing to reduce dense/overlapping content across desktop and mobile.

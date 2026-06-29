@@ -58,8 +58,14 @@ const ANIMALS = [
   { key: 'hippo', name: 'Hippo', thai: 'ฮิปโป', emoji: '🦛', accent: '#b8a1ff' },
   { key: 'rhino', name: 'Rhino', thai: 'แรด', emoji: '🦏', accent: '#b7c4cf' },
   { key: 'crocodile', name: 'Crocodile', thai: 'จระเข้', emoji: '🐊', accent: '#80c783' },
-  { key: 'monkey', name: 'Monkey', thai: 'ลิง', emoji: '🐒', accent: '#d6a06b' }
+  { key: 'monkey', name: 'Monkey', thai: 'ลิง', emoji: '🐒', accent: '#d6a06b' },
+  { key: 'tiger', name: 'Tiger', thai: 'เสือ', emoji: '🐯', accent: '#f97316' },
+  { key: 'panda', name: 'Panda', thai: 'แพนด้า', emoji: '🐼', accent: '#d1d5db' },
+  { key: 'koala', name: 'Koala', thai: 'โคอาลา', emoji: '🐨', accent: '#cbd5e1' },
+  { key: 'fox', name: 'Fox', thai: 'จิ้งจอก', emoji: '🦊', accent: '#fb923c' }
 ];
+
+const REACTION_EMOJIS = ['😂', '😎', '🤔', '😱', '🔥', '👑', '💀', '🙈', '👏', '🍌'];
 
 const rooms = new Map();
 const socketToRoom = new Map();
@@ -92,9 +98,18 @@ function formatRuleForPlayerCount(playerCount) {
   return PLAYER_COUNT_RULES.find((rule) => count <= rule.maxPlayers) || PLAYER_COUNT_RULES[PLAYER_COUNT_RULES.length - 1];
 }
 
+function animalCountForPlayerCount(playerCount) {
+  return formatRuleForPlayerCount(playerCount).animalCount;
+}
+
 function activeAnimalsForPlayerCount(playerCount) {
-  const rule = formatRuleForPlayerCount(playerCount);
-  return ANIMALS.slice(0, rule.animalCount);
+  // Pick a fresh random subset from the full animal pool. This keeps the game
+  // feeling different instead of always starting from the original animals.
+  return shuffle(ANIMALS).slice(0, animalCountForPlayerCount(playerCount));
+}
+
+function stableAnimalsForPlayerCount(playerCount) {
+  return ANIMALS.slice(0, animalCountForPlayerCount(playerCount));
 }
 
 function cardMaxForPlayerCount(playerCount) {
@@ -102,16 +117,16 @@ function cardMaxForPlayerCount(playerCount) {
 }
 
 function gameFormatForPlayerCount(playerCount) {
-  const animals = activeAnimalsForPlayerCount(playerCount);
-  const cardMaxValue = cardMaxForPlayerCount(playerCount);
+  const rule = formatRuleForPlayerCount(playerCount);
+  const cardMaxValue = rule.cardMaxValue;
   const cardsPerAnimal = cardMaxValue + 1;
   return {
-    animalCount: animals.length,
+    animalCount: rule.animalCount,
     cardMaxValue,
     cardsPerAnimal,
-    deckSize: animals.length * cardsPerAnimal,
+    deckSize: rule.animalCount * cardsPerAnimal,
     tokensPerAnimal: TOKENS_PER_ANIMAL,
-    ruleSummary: `ผู้เล่น ${playerCount} คน · สัตว์ ${animals.length} ชนิด · ไพ่แต้ม 0–${cardMaxValue} · ไพ่รวม ${animals.length * cardsPerAnimal} ใบ`
+    ruleSummary: `ผู้เล่น ${playerCount} คน · สัตว์ ${rule.animalCount} ชนิด · ไพ่แต้ม 0–${cardMaxValue} · ไพ่รวม ${rule.animalCount * cardsPerAnimal} ใบ`
   };
 }
 
@@ -121,13 +136,13 @@ function roomFormat(room) {
 }
 
 function roomAnimals(room) {
-  return room.animals || activeAnimalsForPlayerCount(room.players?.length || 0);
+  return room.animals || stableAnimalsForPlayerCount(room.players?.length || 0);
 }
 
 function syncLobbyAnimals(room) {
   if (!room || room.phase !== 'lobby') return;
   const format = roomFormat(room);
-  room.animals = shuffle(activeAnimalsForPlayerCount(room.players.length));
+  room.animals = activeAnimalsForPlayerCount(room.players.length);
   room.cardMaxValue = format.cardMaxValue;
   room.cardsPerAnimal = format.cardsPerAnimal;
   room.board = initialBoard(room.animals);
@@ -191,7 +206,7 @@ function roomPublicState(room, socketId) {
     turnRemainingMs: getTurnRemainingMs(room),
     lastAction: room.lastAction,
     log: room.log.slice(-12),
-    chat: room.chat.slice(-40),
+    reactions: room.reactions.slice(-30),
     animals: roomAnimals(room),
     cardMaxValue: room.cardMaxValue ?? format.cardMaxValue,
     cardsPerAnimal: room.cardsPerAnimal ?? format.cardsPerAnimal,
@@ -235,11 +250,17 @@ function pushTextLog(room, message) {
   if (room.log.length > 60) room.log.shift();
 }
 
-function pushChat(room, player, rawText) {
-  const text = String(rawText || '').replace(/\s+/g, ' ').trim().slice(0, 160);
-  if (!text) return false;
-  room.chat.push({ id: logSeq += 1, stamp: nowStamp(), playerId: player.id, playerName: player.name, text });
-  if (room.chat.length > 80) room.chat.shift();
+function pushReaction(room, player, rawEmoji) {
+  const emoji = String(rawEmoji || '').trim();
+  if (!REACTION_EMOJIS.includes(emoji)) return false;
+  room.reactions.push({
+    id: logSeq += 1,
+    playerId: player.id,
+    playerName: player.name,
+    emoji,
+    createdAt: Date.now()
+  });
+  if (room.reactions.length > 50) room.reactions.shift();
   return true;
 }
 
@@ -281,7 +302,7 @@ function animalByKey(key) {
 
 function createRoom(hostId, hostName) {
   const code = uniqueCode();
-  const initialAnimals = shuffle(activeAnimalsForPlayerCount(1));
+  const initialAnimals = activeAnimalsForPlayerCount(1);
   const room = {
     code,
     hostId,
@@ -299,7 +320,7 @@ function createRoom(hostId, hostName) {
     pendingCard: null,
     lastAction: 'ห้องพร้อมแล้ว ชวนเพื่อนเข้าเล่นออนไลน์ได้เลย',
     log: [],
-    chat: [],
+    reactions: [],
     roundResult: null,
     lastTokenMove: null,
     animals: initialAnimals,
@@ -416,7 +437,7 @@ function startRound(room) {
   const format = gameFormatForPlayerCount(playerCount);
   room.phase = 'playing';
   room.roundNo += 1;
-  room.animals = shuffle(activeAnimalsForPlayerCount(playerCount));
+  room.animals = activeAnimalsForPlayerCount(playerCount);
   room.cardMaxValue = format.cardMaxValue;
   room.cardsPerAnimal = format.cardsPerAnimal;
   room.roundResult = null;
@@ -602,7 +623,7 @@ function resetRoom(room) {
   room.pendingCard = null;
   room.roundResult = null;
   room.lastTokenMove = null;
-  room.animals = shuffle(activeAnimalsForPlayerCount(room.players.length));
+  room.animals = activeAnimalsForPlayerCount(room.players.length);
   room.cardMaxValue = cardMaxForPlayerCount(room.players.length);
   room.cardsPerAnimal = room.cardMaxValue + 1;
   room.board = initialBoard(room.animals);
@@ -841,12 +862,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('sendChat', ({ text }) => {
+  socket.on('sendReaction', ({ emoji }) => {
     const room = roomOf(socket.id);
     if (!room) return emitError(socket, 'ยังไม่ได้อยู่ในห้อง');
     const player = room.players.find((p) => p.id === socket.id);
     if (!player) return emitError(socket, 'ไม่พบผู้เล่น');
-    if (pushChat(room, player, text)) emitRoom(room);
+    if (pushReaction(room, player, emoji)) emitRoom(room);
   });
 
   socket.on('disconnect', () => {

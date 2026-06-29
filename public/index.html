@@ -17,7 +17,7 @@
   <main class="app-shell">
     <section id="welcome" class="welcome-card glass-card simple-welcome">
       <div class="welcome-animals" aria-hidden="true">
-        <span>🦁</span><span>🐘</span><span>🦒</span><span>🦓</span><span>🦛</span><span>🦏</span><span>🐊</span><span>🐒</span>
+        <span>🦁</span><span>🐘</span><span>🦒</span><span>🦓</span><span>🦛</span><span>🦏</span><span>🐊</span><span>🐒</span><span>🐯</span><span>🐼</span><span>🐨</span><span>🦊</span>
       </div>
 
       <div class="form-grid welcome-form">
@@ -111,12 +111,20 @@
       </section>
 
       <section class="hand-panel glass-card">
-        <div class="chat-panel" aria-label="ห้องแชท">
-          <div id="chatMessages" class="chat-messages"></div>
-          <form id="chatForm" class="chat-form">
-            <input id="chatInput" maxlength="160" autocomplete="off" placeholder="พิมพ์แชทกับเพื่อน..." />
-            <button class="ghost-btn smallish" type="submit">ส่ง</button>
-          </form>
+        <div class="emoji-panel" aria-label="ส่ง emoji reaction">
+          <span class="emoji-panel-title">Emoji กวนๆ</span>
+          <div id="emojiDock" class="emoji-dock">
+            <button type="button" data-emoji="😂">😂</button>
+            <button type="button" data-emoji="😎">😎</button>
+            <button type="button" data-emoji="🤔">🤔</button>
+            <button type="button" data-emoji="😱">😱</button>
+            <button type="button" data-emoji="🔥">🔥</button>
+            <button type="button" data-emoji="👑">👑</button>
+            <button type="button" data-emoji="💀">💀</button>
+            <button type="button" data-emoji="🙈">🙈</button>
+            <button type="button" data-emoji="👏">👏</button>
+            <button type="button" data-emoji="🍌">🍌</button>
+          </div>
         </div>
 
         <div class="panel-title hand-title">

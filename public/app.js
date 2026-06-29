@@ -10,6 +10,7 @@ let lastHandRenderSignature = '';
 let lastHandInteractivitySignature = '';
 let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDown') === 'true';
 let lastAnimatedMoveId = null;
+let emojiCleanupTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,9 +37,7 @@ const autoPlayStatus = $('autoPlayStatus');
 const cardFaceToggle = $('cardFaceToggle');
 const turnTimeControl = $('turnTimeControl');
 const turnSecondsInput = $('turnSecondsInput');
-const chatForm = $('chatForm');
-const chatInput = $('chatInput');
-const chatMessages = $('chatMessages');
+const emojiDock = $('emojiDock');
 const rankingTrain = $('rankingTrain');
 
 const fallbackAnimals = {
@@ -49,7 +48,11 @@ const fallbackAnimals = {
   hippo: { key: 'hippo', name: 'Hippo', thai: 'ฮิปโป', emoji: '🦛' },
   rhino: { key: 'rhino', name: 'Rhino', thai: 'แรด', emoji: '🦏' },
   crocodile: { key: 'crocodile', name: 'Crocodile', thai: 'จระเข้', emoji: '🐊' },
-  monkey: { key: 'monkey', name: 'Monkey', thai: 'ลิง', emoji: '🐒' }
+  monkey: { key: 'monkey', name: 'Monkey', thai: 'ลิง', emoji: '🐒' },
+  tiger: { key: 'tiger', name: 'Tiger', thai: 'เสือ', emoji: '🐯' },
+  panda: { key: 'panda', name: 'Panda', thai: 'แพนด้า', emoji: '🐼' },
+  koala: { key: 'koala', name: 'Koala', thai: 'โคอาลา', emoji: '🐨' },
+  fox: { key: 'fox', name: 'Fox', thai: 'จิ้งจอก', emoji: '🦊' }
 };
 
 const savedName = localStorage.getItem('botswanaPlayerName');
@@ -114,13 +117,11 @@ if (turnSecondsInput) {
   turnSecondsInput.addEventListener('blur', sendTurnLimit);
 }
 
-if (chatForm) {
-  chatForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const text = (chatInput?.value || '').trim();
-    if (!text) return;
-    socket.emit('sendChat', { text });
-    chatInput.value = '';
+if (emojiDock) {
+  emojiDock.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-emoji]');
+    if (!button) return;
+    socket.emit('sendReaction', { emoji: button.dataset.emoji });
   });
 }
 
@@ -181,7 +182,7 @@ function render() {
   renderRankingTrain();
   renderPlayers();
   renderBoard();
-  renderChat();
+  scheduleEmojiReactionCleanup();
   renderHand();
   renderLog();
   runTokenMoveAnimation();
@@ -314,7 +315,9 @@ function renderPlayers() {
       })
       .join('');
 
+    const reaction = activeReactionForPlayer(player.id);
     card.innerHTML = `
+      ${reaction ? `<div class="emoji-bubble" aria-label="emoji reaction">${escapeHtml(reaction.emoji)}</div>` : ''}
       <div class="player-head">
         <span class="player-name">${escapeHtml(player.name)}</span>
         <span class="badge">Seat ${player.seat}</span>
@@ -353,6 +356,26 @@ function renderRankingTrain() {
       `).join('<span class="train-link">→</span>')}
     </div>
   `;
+}
+
+function activeReactionForPlayer(playerId) {
+  const now = Date.now();
+  return (state.reactions || [])
+    .filter((reaction) => reaction.playerId === playerId && now - Number(reaction.createdAt || 0) < 4200)
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))[0] || null;
+}
+
+function scheduleEmojiReactionCleanup() {
+  if (emojiCleanupTimer) clearTimeout(emojiCleanupTimer);
+  const now = Date.now();
+  const active = (state.reactions || [])
+    .map((reaction) => 4200 - (now - Number(reaction.createdAt || 0)))
+    .filter((ms) => ms > 0);
+  if (!active.length) return;
+  emojiCleanupTimer = setTimeout(() => {
+    renderPlayers();
+    emojiCleanupTimer = null;
+  }, Math.min(...active) + 50);
 }
 
 function calculateLiveRoundScore(player) {
@@ -543,23 +566,6 @@ function emitCurrentHandOrder() {
   }
 }
 
-function renderChat() {
-  if (!chatMessages || !state) return;
-  const messages = (state.chat || []).slice(-8);
-  if (!messages.length) {
-    chatMessages.innerHTML = '<div class="chat-empty">ยังไม่มีข้อความ</div>';
-    return;
-  }
-  chatMessages.innerHTML = messages.map((item) => `
-    <div class="chat-message ${item.playerId === state.myId ? 'mine' : ''}">
-      <span class="chat-stamp">${escapeHtml(item.stamp || '')}</span>
-      <strong>${escapeHtml(item.playerName || 'Player')}</strong>
-      <span>${escapeHtml(item.text || '')}</span>
-    </div>
-  `).join('');
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
 function renderLog() {
   const log = $('gameLog');
   if (!state.log.length) {
@@ -742,7 +748,11 @@ function cardBackground(animalKey) {
     hippo: 'linear-gradient(145deg, #e8ddff, #b8a1ff)',
     rhino: 'linear-gradient(145deg, #eef3f7, #b7c4cf)',
     crocodile: 'linear-gradient(145deg, #d9f99d, #80c783)',
-    monkey: 'linear-gradient(145deg, #f6d7b0, #d6a06b)'
+    monkey: 'linear-gradient(145deg, #f6d7b0, #d6a06b)',
+    tiger: 'linear-gradient(145deg, #fed7aa, #f97316)',
+    panda: 'linear-gradient(145deg, #ffffff, #d1d5db)',
+    koala: 'linear-gradient(145deg, #e2e8f0, #94a3b8)',
+    fox: 'linear-gradient(145deg, #fdba74, #fb923c)'
   };
   return gradients[animalKey] || 'linear-gradient(145deg, #fff, #ddd)';
 }
