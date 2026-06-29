@@ -65,7 +65,7 @@ const ANIMALS = [
   { key: 'fox', name: 'Fox', thai: 'จิ้งจอก', emoji: '🦊', accent: '#fb923c' }
 ];
 
-const REACTION_EMOJIS = ['😂', '😎', '🤔', '😱', '🔥', '👑', '💀', '🙈', '👏', '🍌'];
+const REACTION_EMOJIS = ['😂', '😎', '🤔', '😱', '🔥', '👑', '💀', '🙈', '👏', '🍌', '🤡', '🫠', '😏', '😭', '🤯', '🫣', '💩', '🥶', '🧠', '🫵'];
 
 const rooms = new Map();
 const socketToRoom = new Map();

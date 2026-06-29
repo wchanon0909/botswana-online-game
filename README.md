@@ -138,3 +138,10 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Replaced real-time chat with quick emoji reactions. Reactions appear on the player's card for about 4 seconds.
 - Safari animal types are now randomly selected from a larger animal pool according to the active player-count rule.
 - Adjusted module proportions and spacing to reduce dense/overlapping content across desktop and mobile.
+
+
+## Latest fix
+- Welcome animal icons now wrap inside the card and no longer overflow the resolution.
+- Emoji dock fills the full module width and includes more sticker-style reactions.
+- Emoji reactions stay inside player cards instead of floating outside the frame.
+- Card face default is reset to face-up for this version.

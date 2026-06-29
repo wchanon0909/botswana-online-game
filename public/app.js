@@ -8,7 +8,8 @@ let originalTitle = document.title;
 let draggedCardId = null;
 let lastHandRenderSignature = '';
 let lastHandInteractivitySignature = '';
-let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDown') === 'true';
+localStorage.removeItem('botswanaCardsFaceDown');
+let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDownV2') === 'true';
 let lastAnimatedMoveId = null;
 let emojiCleanupTimer = null;
 
@@ -102,7 +103,7 @@ if (autoPlayToggle) {
 if (cardFaceToggle) {
   cardFaceToggle.addEventListener('click', () => {
     cardsFaceDown = !cardsFaceDown;
-    localStorage.setItem('botswanaCardsFaceDown', String(cardsFaceDown));
+    localStorage.setItem('botswanaCardsFaceDownV2', String(cardsFaceDown));
     renderCardFaceControl();
     renderHand();
   });
