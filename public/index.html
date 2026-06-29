@@ -45,33 +45,35 @@
           <strong id="turnTimerText">00:30</strong>
         </div>
       </div>
-      <header class="topbar glass-card">
+      <header class="topbar glass-card topbar-unified">
         <div class="room-block">
           <p class="eyebrow">Room</p>
           <h2 id="roomTitle">----</h2>
         </div>
-        <div class="topbar-mini" id="topbarMini" aria-label="mobile game status">
-          <div class="mini-chip">
-            <span class="mini-label">เวลา</span>
+
+        <section class="top-status" aria-label="สถานะเกม">
+          <div class="status-chip timer-chip">
+            <span class="label">เวลา</span>
             <strong id="compactTimerText">--:--</strong>
           </div>
-          <div class="mini-chip">
-            <span class="mini-label">ตา</span>
-            <strong id="compactTurnText">-</strong>
+          <div class="status-chip">
+            <span class="label">สถานะ</span>
+            <strong id="phaseText">Lobby</strong>
           </div>
-          <div class="mini-chip">
-            <span class="mini-label">รอบ</span>
-            <strong id="compactRoundText">0</strong>
+          <div class="status-chip">
+            <span class="label">ตาปัจจุบัน</span>
+            <strong id="turnText">-</strong>
           </div>
-          <div class="mini-chip">
-            <span class="mini-label">สถานะ</span>
-            <strong id="compactPhaseText">Lobby</strong>
+          <div class="status-chip mini">
+            <span class="label">รอบ</span>
+            <strong id="roundText">0</strong>
           </div>
-          <div class="mini-chip rule-chip">
-            <span class="mini-label">กติกา</span>
-            <strong id="compactVariantText">5 สัตว์ · 30s</strong>
+          <div class="status-chip rule-chip">
+            <span class="label">กติกา</span>
+            <strong id="variantText">5 สัตว์ · 30s</strong>
           </div>
-        </div>
+        </section>
+
         <div class="top-actions">
           <label id="turnTimeControl" class="turn-time-control hidden">
             เวลาต่อรอบ
@@ -85,66 +87,56 @@
         </div>
       </header>
 
-      <section class="status-strip glass-card">
-        <div>
-          <span class="label">สถานะ</span>
-          <strong id="phaseText">Lobby</strong>
-        </div>
-        <div>
-          <span class="label">ตาปัจจุบัน</span>
-          <strong id="turnText">-</strong>
-        </div>
-        <div>
-          <span class="label">รอบ</span>
-          <strong id="roundText">0</strong>
-        </div>
-        <div>
-          <span class="label">กติกา</span>
-          <strong id="variantText">5 สัตว์ · 30s</strong>
-        </div>
-      </section>
-
       <section id="rankingTrain" class="ranking-train glass-card" aria-live="polite"></section>
 
-      <div class="mobile-fab-stack" aria-label="mobile quick modules">
+      <div class="mobile-fab-stack" aria-label="Mobile quick modules">
         <button id="rankingFab" class="module-fab" type="button" aria-expanded="false" aria-controls="rankingOverlay">🏆<span>Rank</span></button>
         <button id="logFab" class="module-fab" type="button" aria-expanded="false" aria-controls="logOverlay">📜<span>Log</span></button>
         <button id="emojiFab" class="module-fab" type="button" aria-expanded="false" aria-controls="emojiOverlay">😜<span>Emoji</span></button>
       </div>
 
-      <div id="rankingOverlay" class="floating-panel glass-card hidden" role="dialog" aria-modal="false" aria-label="Realtime ranking">
-        <div class="floating-panel-head"><strong>Ranking</strong><button class="floating-close" data-close-floating="rankingOverlay" type="button">✕</button></div>
+      <div id="rankingOverlay" class="floating-panel glass-card hidden" role="dialog" aria-modal="false" aria-label="Ranking table">
+        <div class="floating-panel-head">
+          <strong>Ranking</strong>
+          <button class="floating-close" data-close-floating="rankingOverlay" type="button" aria-label="close ranking">✕</button>
+        </div>
         <div id="rankingTable" class="ranking-table"></div>
       </div>
 
       <div id="logOverlay" class="floating-panel glass-card hidden" role="dialog" aria-modal="false" aria-label="Game log">
-        <div class="floating-panel-head"><strong>Game Log</strong><button class="floating-close" data-close-floating="logOverlay" type="button">✕</button></div>
+        <div class="floating-panel-head">
+          <strong>Game Log</strong>
+          <button class="floating-close" data-close-floating="logOverlay" type="button" aria-label="close log">✕</button>
+        </div>
         <div id="mobileLog" class="game-log mobile-log"></div>
       </div>
 
       <div id="emojiOverlay" class="floating-panel glass-card hidden" role="dialog" aria-modal="false" aria-label="Emoji reactions">
-        <div class="floating-panel-head"><strong>Emoji / Sticker</strong><button class="floating-close" data-close-floating="emojiOverlay" type="button">✕</button></div>
+        <div class="floating-panel-head">
+          <strong>Emoji / Sticker</strong>
+          <button class="floating-close" data-close-floating="emojiOverlay" type="button" aria-label="close emoji">✕</button>
+        </div>
         <div id="mobileEmojiDock" class="emoji-dock popup-emoji-dock">
-            <button type="button" data-emoji="😂">😂</button>
-            <button type="button" data-emoji="😎">😎</button>
-            <button type="button" data-emoji="🤔">🤔</button>
-            <button type="button" data-emoji="😱">😱</button>
-            <button type="button" data-emoji="🔥">🔥</button>
-            <button type="button" data-emoji="👑">👑</button>
-            <button type="button" data-emoji="💀">💀</button>
-            <button type="button" data-emoji="🙈">🙈</button>
-            <button type="button" data-emoji="👏">👏</button>
-            <button type="button" data-emoji="🍌">🍌</button>
-            <button type="button" data-emoji="🤡">🤡</button>
-            <button type="button" data-emoji="🫠">🫠</button>
-            <button type="button" data-emoji="😏">😏</button>
-            <button type="button" data-emoji="😭">😭</button>
-            <button type="button" data-emoji="🤯">🤯</button>
-            <button type="button" data-emoji="🫣">🫣</button>
-            <button type="button" data-emoji="💩">💩</button>
-            <button type="button" data-emoji="🥶">🥶</button>
-            <button type="button" data-emoji="🧠">🧠</button>
-            <button type="button" data-emoji="🫵">🫵</button>
+          <button type="button" data-emoji="😂">😂</button>
+          <button type="button" data-emoji="😎">😎</button>
+          <button type="button" data-emoji="🤔">🤔</button>
+          <button type="button" data-emoji="😱">😱</button>
+          <button type="button" data-emoji="🔥">🔥</button>
+          <button type="button" data-emoji="👑">👑</button>
+          <button type="button" data-emoji="💀">💀</button>
+          <button type="button" data-emoji="🙈">🙈</button>
+          <button type="button" data-emoji="👏">👏</button>
+          <button type="button" data-emoji="🍌">🍌</button>
+          <button type="button" data-emoji="🤡">🤡</button>
+          <button type="button" data-emoji="🫠">🫠</button>
+          <button type="button" data-emoji="😏">😏</button>
+          <button type="button" data-emoji="😭">😭</button>
+          <button type="button" data-emoji="🤯">🤯</button>
+          <button type="button" data-emoji="🫣">🫣</button>
+          <button type="button" data-emoji="💩">💩</button>
+          <button type="button" data-emoji="🥶">🥶</button>
+          <button type="button" data-emoji="🧠">🧠</button>
+          <button type="button" data-emoji="🫵">🫵</button>
         </div>
       </div>
 
@@ -238,6 +230,15 @@
       <div class="button-row modal-actions">
         <button id="scoreCloseBtn" class="secondary-btn">ดูบอร์ดต่อ</button>
       </div>
+    </div>
+  </div>
+
+  <div class="rotate-overlay" aria-live="polite">
+    <div class="rotate-card glass-card">
+      <div class="rotate-icon">📱↔️</div>
+      <h3>หมุนโทรศัพท์เป็นแนวนอน</h3>
+      <p>โหมดเล่นเกมบนมือถือออกแบบสำหรับแนวนอน เพื่อให้เห็น Safari Board และการ์ดในมือพร้อมกัน</p>
+      <small>หน้าแรกและ Lobby ยังใช้แนวตั้งได้ตามปกติ</small>
     </div>
   </div>
 

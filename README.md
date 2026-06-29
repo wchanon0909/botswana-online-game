@@ -147,9 +147,16 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Card face default is reset to face-up for this version.
 
 
-## Mobile UI update
-- Added mobile-only floating modules for Ranking, Game Log, and Emoji.
-- Moved key status info into a compact top bar on mobile.
-- Kept desktop layout as-is while redesigning the mobile experience.
-- Hand cards are fixed at the bottom on mobile with Auto Play preserved.
-- Floating popups auto-close when it becomes your turn.
+## Latest update: topbar + emoji layout
+- Combined status, current turn, round, and rule summary into the main topbar.
+- Fixed emoji dock clipping by using a responsive grid and larger safe buttons.
+- Added mobile UI preparation notes for future split layout and bottom action bar.
+
+
+## Mobile landscape lock update
+- Desktop layout is kept unchanged.
+- Mobile gameplay now prefers landscape layout.
+- Portrait mode during active gameplay shows a rotate-phone overlay.
+- Mobile landscape uses compact topbar, left player rail, large Safari Board, fixed bottom hand, and floating Rank / Log / Emoji modules.
+- Floating modules auto-close when it becomes your turn.
+- Emoji buttons are constrained inside their button frame to prevent clipped or misplaced emoji.

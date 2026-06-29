@@ -13,7 +13,7 @@ let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDownV2') === 'true';
 let lastAnimatedMoveId = null;
 let emojiCleanupTimer = null;
 let openFloatingPanelId = '';
-let mobileStatusTimer = null;
+let compactTimerInterval = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -43,10 +43,6 @@ const turnSecondsInput = $('turnSecondsInput');
 const emojiDock = $('emojiDock');
 const rankingTrain = $('rankingTrain');
 const compactTimerText = $('compactTimerText');
-const compactTurnText = $('compactTurnText');
-const compactRoundText = $('compactRoundText');
-const compactPhaseText = $('compactPhaseText');
-const compactVariantText = $('compactVariantText');
 const rankingFab = $('rankingFab');
 const logFab = $('logFab');
 const emojiFab = $('emojiFab');
@@ -134,11 +130,26 @@ if (turnSecondsInput) {
 }
 
 document.addEventListener('click', (event) => {
-  const button = event.target.closest('button[data-emoji]');
-  if (!button) return;
-  socket.emit('sendReaction', { emoji: button.dataset.emoji });
-  if (window.matchMedia('(max-width: 900px)').matches) closeFloatingPanel('emojiOverlay');
+  const emojiButton = event.target.closest('button[data-emoji]');
+  if (emojiButton) {
+    socket.emit('sendReaction', { emoji: emojiButton.dataset.emoji });
+    if (isMobileViewport()) closeFloatingPanel('emojiOverlay');
+    return;
+  }
+
+  const closeButton = event.target.closest('[data-close-floating]');
+  if (closeButton) {
+    closeFloatingPanel(closeButton.dataset.closeFloating);
+  }
 });
+
+rankingFab?.addEventListener('click', () => toggleFloatingPanel('rankingOverlay'));
+logFab?.addEventListener('click', () => toggleFloatingPanel('logOverlay'));
+emojiFab?.addEventListener('click', () => toggleFloatingPanel('emojiOverlay'));
+
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 900px)').matches;
+}
 
 function toggleFloatingPanel(panelId) {
   const panel = $(panelId);
@@ -170,18 +181,23 @@ function syncFloatingFabState() {
   [rankingFab, logFab, emojiFab].forEach((btn) => {
     if (!btn) return;
     const panelId = btn.getAttribute('aria-controls');
-    btn.setAttribute('aria-expanded', String(openFloatingPanelId === panelId));
-    btn.classList.toggle('active', openFloatingPanelId === panelId);
+    const active = openFloatingPanelId === panelId;
+    btn.setAttribute('aria-expanded', String(active));
+    btn.classList.toggle('active', active);
   });
 }
 
-rankingFab?.addEventListener('click', () => toggleFloatingPanel('rankingOverlay'));
-logFab?.addEventListener('click', () => toggleFloatingPanel('logOverlay'));
-emojiFab?.addEventListener('click', () => toggleFloatingPanel('emojiOverlay'));
-document.addEventListener('click', (event) => {
-  const closeBtn = event.target.closest('[data-close-floating]');
-  if (closeBtn) closeFloatingPanel(closeBtn.dataset.closeFloating);
-});
+function updateViewportVars() {
+  const viewport = window.visualViewport;
+  const height = viewport?.height || window.innerHeight;
+  const width = viewport?.width || window.innerWidth;
+  document.documentElement.style.setProperty('--app-vh', `${height}px`);
+  document.documentElement.style.setProperty('--app-vw', `${width}px`);
+}
+
+window.addEventListener('resize', updateViewportVars);
+window.visualViewport?.addEventListener('resize', updateViewportVars);
+updateViewportVars();
 
 copyLinkBtn.addEventListener('click', async () => {
   if (!state) return;
@@ -217,6 +233,7 @@ function showToast(message) {
 
 function render() {
   if (!state) return;
+  document.body.classList.toggle('mobile-gameplay', state.phase !== 'lobby');
   welcome.classList.add('hidden');
   game.classList.remove('hidden');
 
@@ -225,10 +242,6 @@ function render() {
   $('turnText').textContent = state.currentPlayerName || (state.phase === 'lobby' ? 'รอเริ่มเกม' : '-');
   $('roundText').textContent = state.roundNo || 0;
   $('variantText').textContent = `${state.ruleSummary || `${state.animals.length} สัตว์`} · ${state.turnLimitSeconds || 30}s`;
-  if (compactPhaseText) compactPhaseText.textContent = phaseLabel(state.phase);
-  if (compactTurnText) compactTurnText.textContent = state.currentPlayerName || (state.phase === 'lobby' ? 'รอเริ่มเกม' : '-');
-  if (compactRoundText) compactRoundText.textContent = state.roundNo || 0;
-  if (compactVariantText) compactVariantText.textContent = `${state.animals.length} สัตว์ · ${state.turnLimitSeconds || 30}s`;
   $('playerCountText').textContent = `${state.players.length}/${state.maxPlayers}`;
   $('lastActionText').textContent = state.lastAction || 'พร้อมเล่น';
 
@@ -242,7 +255,7 @@ function render() {
   renderTurnTimer();
   updateTitleFlash();
   renderRankingTrain();
-  renderRankingOverlay();
+  renderRankingTable();
   renderPlayers();
   renderBoard();
   scheduleEmojiReactionCleanup();
@@ -307,7 +320,7 @@ function renderCardFaceControl() {
 
 function renderTurnTimer() {
   if (!turnTimer || !state) return;
-  startCompactTimerLoop();
+  startCompactTimer();
   updateCompactTimer();
   const shouldShow = isMyActionTurn();
   turnTimer.classList.toggle('hidden', !shouldShow);
@@ -334,20 +347,6 @@ function updateTurnTimerText() {
   updateCompactTimer(remainingMs);
 }
 
-function updateCompactTimer(remainingMsOverride) {
-  if (!compactTimerText || !state) return;
-  const showLive = state.phase === 'playing' || state.phase === 'take';
-  let remainingMs = Number.isFinite(remainingMsOverride) ? remainingMsOverride : null;
-  if (remainingMs == null && showLive) {
-    const startRemaining = Number.isFinite(state.turnRemainingMs) ? state.turnRemainingMs : ((state.turnLimitSeconds || 30) * 1000);
-    remainingMs = Math.max(0, startRemaining - (Date.now() - stateReceivedAt));
-  }
-  const seconds = showLive ? Math.ceil((remainingMs || 0) / 1000) : (state.turnLimitSeconds || 30);
-  const minutesText = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const secondsText = String(seconds % 60).padStart(2, '0');
-  compactTimerText.textContent = `${minutesText}:${secondsText}`;
-}
-
 function stopTimerInterval() {
   if (timerInterval) {
     clearInterval(timerInterval);
@@ -355,13 +354,33 @@ function stopTimerInterval() {
   }
 }
 
-function startCompactTimerLoop() {
-  if (mobileStatusTimer) clearInterval(mobileStatusTimer);
+function startCompactTimer() {
+  if (compactTimerInterval) clearInterval(compactTimerInterval);
   if (!state || (state.phase !== 'playing' && state.phase !== 'take')) {
-    mobileStatusTimer = null;
+    compactTimerInterval = null;
     return;
   }
-  mobileStatusTimer = setInterval(() => updateCompactTimer(), 500);
+  compactTimerInterval = setInterval(() => updateCompactTimer(), 500);
+}
+
+function updateCompactTimer(remainingMsOverride) {
+  if (!compactTimerText || !state) return;
+  const activeTimer = state.phase === 'playing' || state.phase === 'take';
+  if (!activeTimer) {
+    compactTimerText.textContent = `00:${String(state.turnLimitSeconds || 30).padStart(2, '0')}`;
+    compactTimerText.closest('.status-chip')?.classList.remove('urgent');
+    return;
+  }
+  let remainingMs = Number.isFinite(remainingMsOverride) ? remainingMsOverride : null;
+  if (remainingMs == null) {
+    const startRemaining = Number.isFinite(state.turnRemainingMs) ? state.turnRemainingMs : ((state.turnLimitSeconds || 30) * 1000);
+    remainingMs = Math.max(0, startRemaining - (Date.now() - stateReceivedAt));
+  }
+  const remaining = Math.ceil(remainingMs / 1000);
+  const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const seconds = String(remaining % 60).padStart(2, '0');
+  compactTimerText.textContent = `${minutes}:${seconds}`;
+  compactTimerText.closest('.status-chip')?.classList.toggle('urgent', remaining <= 10);
 }
 
 function updateTitleFlash() {
@@ -661,7 +680,7 @@ function getRankingData() {
     .sort((a, b) => (b.liveScore - a.liveScore) || (b.totalScore - a.totalScore) || (a.seat - b.seat));
 }
 
-function renderRankingOverlay() {
+function renderRankingTable() {
   if (!rankingTable || !state) return;
   const ranking = getRankingData();
   rankingTable.innerHTML = ranking.map((player, index) => `
@@ -692,7 +711,7 @@ function renderMobileLog() {
 
 function renderLog() {
   const log = $('gameLog');
-  log.innerHTML = buildLogHtml();
+  if (log) log.innerHTML = buildLogHtml();
 }
 
 function moveLogHtml(entry) {
