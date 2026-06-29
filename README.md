@@ -145,3 +145,9 @@ Rooms are stored in server memory. If the server restarts, active rooms disappea
 - Emoji dock fills the full module width and includes more sticker-style reactions.
 - Emoji reactions stay inside player cards instead of floating outside the frame.
 - Card face default is reset to face-up for this version.
+
+
+## Latest update: topbar + emoji layout
+- Combined status, current turn, round, and rule summary into the main topbar.
+- Fixed emoji dock clipping by using a responsive grid and larger safe buttons.
+- Added mobile UI preparation notes for future split layout and bottom action bar.

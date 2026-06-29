@@ -45,11 +45,31 @@
           <strong id="turnTimerText">00:30</strong>
         </div>
       </div>
-      <header class="topbar glass-card">
-        <div>
+      <header class="topbar glass-card topbar-unified">
+        <div class="room-block">
           <p class="eyebrow">Room</p>
           <h2 id="roomTitle">----</h2>
         </div>
+
+        <section class="top-status" aria-label="สถานะเกม">
+          <div class="status-chip">
+            <span class="label">สถานะ</span>
+            <strong id="phaseText">Lobby</strong>
+          </div>
+          <div class="status-chip">
+            <span class="label">ตาปัจจุบัน</span>
+            <strong id="turnText">-</strong>
+          </div>
+          <div class="status-chip mini">
+            <span class="label">รอบ</span>
+            <strong id="roundText">0</strong>
+          </div>
+          <div class="status-chip rule-chip">
+            <span class="label">กติกา</span>
+            <strong id="variantText">5 สัตว์ · 30s</strong>
+          </div>
+        </section>
+
         <div class="top-actions">
           <label id="turnTimeControl" class="turn-time-control hidden">
             เวลาต่อรอบ
@@ -62,25 +82,6 @@
           <button id="resetBtn" class="ghost-btn smallish hidden">รีเซ็ต</button>
         </div>
       </header>
-
-      <section class="status-strip glass-card">
-        <div>
-          <span class="label">สถานะ</span>
-          <strong id="phaseText">Lobby</strong>
-        </div>
-        <div>
-          <span class="label">ตาปัจจุบัน</span>
-          <strong id="turnText">-</strong>
-        </div>
-        <div>
-          <span class="label">รอบ</span>
-          <strong id="roundText">0</strong>
-        </div>
-        <div>
-          <span class="label">กติกา</span>
-          <strong id="variantText">5 สัตว์ · 30s</strong>
-        </div>
-      </section>
 
       <section id="rankingTrain" class="ranking-train glass-card" aria-live="polite"></section>
 
