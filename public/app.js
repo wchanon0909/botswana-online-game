@@ -12,6 +12,8 @@ localStorage.removeItem('botswanaCardsFaceDown');
 let cardsFaceDown = localStorage.getItem('botswanaCardsFaceDownV2') === 'true';
 let lastAnimatedMoveId = null;
 let emojiCleanupTimer = null;
+let openFloatingPanelId = '';
+let mobileStatusTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,6 +42,19 @@ const turnTimeControl = $('turnTimeControl');
 const turnSecondsInput = $('turnSecondsInput');
 const emojiDock = $('emojiDock');
 const rankingTrain = $('rankingTrain');
+const compactTimerText = $('compactTimerText');
+const compactTurnText = $('compactTurnText');
+const compactRoundText = $('compactRoundText');
+const compactPhaseText = $('compactPhaseText');
+const compactVariantText = $('compactVariantText');
+const rankingFab = $('rankingFab');
+const logFab = $('logFab');
+const emojiFab = $('emojiFab');
+const rankingOverlay = $('rankingOverlay');
+const logOverlay = $('logOverlay');
+const emojiOverlay = $('emojiOverlay');
+const rankingTable = $('rankingTable');
+const mobileLog = $('mobileLog');
 
 const fallbackAnimals = {
   lion: { key: 'lion', name: 'Lion', thai: 'สิงโต', emoji: '🦁' },
@@ -118,13 +133,55 @@ if (turnSecondsInput) {
   turnSecondsInput.addEventListener('blur', sendTurnLimit);
 }
 
-if (emojiDock) {
-  emojiDock.addEventListener('click', (event) => {
-    const button = event.target.closest('button[data-emoji]');
-    if (!button) return;
-    socket.emit('sendReaction', { emoji: button.dataset.emoji });
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-emoji]');
+  if (!button) return;
+  socket.emit('sendReaction', { emoji: button.dataset.emoji });
+  if (window.matchMedia('(max-width: 900px)').matches) closeFloatingPanel('emojiOverlay');
+});
+
+function toggleFloatingPanel(panelId) {
+  const panel = $(panelId);
+  if (!panel) return;
+  const shouldOpen = openFloatingPanelId !== panelId || panel.classList.contains('hidden');
+  closeAllFloatingPanels();
+  if (shouldOpen) {
+    panel.classList.remove('hidden');
+    openFloatingPanelId = panelId;
+  }
+  syncFloatingFabState();
+}
+
+function closeFloatingPanel(panelId) {
+  const panel = $(panelId);
+  if (!panel) return;
+  panel.classList.add('hidden');
+  if (openFloatingPanelId === panelId) openFloatingPanelId = '';
+  syncFloatingFabState();
+}
+
+function closeAllFloatingPanels() {
+  [rankingOverlay, logOverlay, emojiOverlay].forEach((panel) => panel?.classList.add('hidden'));
+  openFloatingPanelId = '';
+  syncFloatingFabState();
+}
+
+function syncFloatingFabState() {
+  [rankingFab, logFab, emojiFab].forEach((btn) => {
+    if (!btn) return;
+    const panelId = btn.getAttribute('aria-controls');
+    btn.setAttribute('aria-expanded', String(openFloatingPanelId === panelId));
+    btn.classList.toggle('active', openFloatingPanelId === panelId);
   });
 }
+
+rankingFab?.addEventListener('click', () => toggleFloatingPanel('rankingOverlay'));
+logFab?.addEventListener('click', () => toggleFloatingPanel('logOverlay'));
+emojiFab?.addEventListener('click', () => toggleFloatingPanel('emojiOverlay'));
+document.addEventListener('click', (event) => {
+  const closeBtn = event.target.closest('[data-close-floating]');
+  if (closeBtn) closeFloatingPanel(closeBtn.dataset.closeFloating);
+});
 
 copyLinkBtn.addEventListener('click', async () => {
   if (!state) return;
@@ -168,6 +225,10 @@ function render() {
   $('turnText').textContent = state.currentPlayerName || (state.phase === 'lobby' ? 'รอเริ่มเกม' : '-');
   $('roundText').textContent = state.roundNo || 0;
   $('variantText').textContent = `${state.ruleSummary || `${state.animals.length} สัตว์`} · ${state.turnLimitSeconds || 30}s`;
+  if (compactPhaseText) compactPhaseText.textContent = phaseLabel(state.phase);
+  if (compactTurnText) compactTurnText.textContent = state.currentPlayerName || (state.phase === 'lobby' ? 'รอเริ่มเกม' : '-');
+  if (compactRoundText) compactRoundText.textContent = state.roundNo || 0;
+  if (compactVariantText) compactVariantText.textContent = `${state.animals.length} สัตว์ · ${state.turnLimitSeconds || 30}s`;
   $('playerCountText').textContent = `${state.players.length}/${state.maxPlayers}`;
   $('lastActionText').textContent = state.lastAction || 'พร้อมเล่น';
 
@@ -181,11 +242,14 @@ function render() {
   renderTurnTimer();
   updateTitleFlash();
   renderRankingTrain();
+  renderRankingOverlay();
   renderPlayers();
   renderBoard();
   scheduleEmojiReactionCleanup();
   renderHand();
   renderLog();
+  renderMobileLog();
+  if (isMyActionTurn()) closeAllFloatingPanels();
   runTokenMoveAnimation();
   renderTokenModal();
   renderScoreModal();
@@ -243,6 +307,8 @@ function renderCardFaceControl() {
 
 function renderTurnTimer() {
   if (!turnTimer || !state) return;
+  startCompactTimerLoop();
+  updateCompactTimer();
   const shouldShow = isMyActionTurn();
   turnTimer.classList.toggle('hidden', !shouldShow);
 
@@ -265,6 +331,21 @@ function updateTurnTimerText() {
   const seconds = String(remaining % 60).padStart(2, '0');
   turnTimerText.textContent = `${minutes}:${seconds}`;
   turnTimer.classList.toggle('urgent', remaining <= 10);
+  updateCompactTimer(remainingMs);
+}
+
+function updateCompactTimer(remainingMsOverride) {
+  if (!compactTimerText || !state) return;
+  const showLive = state.phase === 'playing' || state.phase === 'take';
+  let remainingMs = Number.isFinite(remainingMsOverride) ? remainingMsOverride : null;
+  if (remainingMs == null && showLive) {
+    const startRemaining = Number.isFinite(state.turnRemainingMs) ? state.turnRemainingMs : ((state.turnLimitSeconds || 30) * 1000);
+    remainingMs = Math.max(0, startRemaining - (Date.now() - stateReceivedAt));
+  }
+  const seconds = showLive ? Math.ceil((remainingMs || 0) / 1000) : (state.turnLimitSeconds || 30);
+  const minutesText = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const secondsText = String(seconds % 60).padStart(2, '0');
+  compactTimerText.textContent = `${minutesText}:${secondsText}`;
 }
 
 function stopTimerInterval() {
@@ -272,6 +353,15 @@ function stopTimerInterval() {
     clearInterval(timerInterval);
     timerInterval = null;
   }
+}
+
+function startCompactTimerLoop() {
+  if (mobileStatusTimer) clearInterval(mobileStatusTimer);
+  if (!state || (state.phase !== 'playing' && state.phase !== 'take')) {
+    mobileStatusTimer = null;
+    return;
+  }
+  mobileStatusTimer = setInterval(() => updateCompactTimer(), 500);
 }
 
 function updateTitleFlash() {
@@ -338,13 +428,7 @@ function renderRankingTrain() {
     return;
   }
 
-  const ranking = [...state.players]
-    .map((player) => ({
-      ...player,
-      liveScore: state.phase === 'round_end' ? player.roundScore : calculateLiveRoundScore(player)
-    }))
-    .sort((a, b) => (b.liveScore - a.liveScore) || (b.totalScore - a.totalScore) || (a.seat - b.seat));
-
+  const ranking = getRankingData();
   rankingTrain.innerHTML = `
     <div class="ranking-label">Realtime Ranking</div>
     <div class="train-track">
@@ -567,19 +651,48 @@ function emitCurrentHandOrder() {
   }
 }
 
-function renderLog() {
-  const log = $('gameLog');
-  if (!state.log.length) {
-    log.innerHTML = '<div class="empty-state">ยังไม่มี action</div>';
-    return;
-  }
-  log.innerHTML = state.log.slice().reverse().map((entry) => {
+
+function getRankingData() {
+  return [...state.players]
+    .map((player) => ({
+      ...player,
+      liveScore: state.phase === 'round_end' ? player.roundScore : calculateLiveRoundScore(player)
+    }))
+    .sort((a, b) => (b.liveScore - a.liveScore) || (b.totalScore - a.totalScore) || (a.seat - b.seat));
+}
+
+function renderRankingOverlay() {
+  if (!rankingTable || !state) return;
+  const ranking = getRankingData();
+  rankingTable.innerHTML = ranking.map((player, index) => `
+    <div class="ranking-row ${index === 0 ? 'leader' : ''}">
+      <span class="ranking-rank">${index === 0 ? '👑' : `#${index + 1}`}</span>
+      <strong>${escapeHtml(player.name)}</strong>
+      <span class="ranking-live">${player.liveScore}</span>
+      <small class="ranking-total">รวม ${player.totalScore}</small>
+    </div>
+  `).join('') || '<div class="empty-state">ยังไม่มีผู้เล่น</div>';
+}
+
+function buildLogHtml() {
+  if (!state.log.length) return '<div class="empty-state">ยังไม่มี action</div>';
+  return state.log.slice().reverse().map((entry) => {
     if (typeof entry === 'string') return `<div class="log-entry">${escapeHtml(entry)}</div>`;
     if (entry.type === 'move') return moveLogHtml(entry);
     if (entry.type === 'card') return cardLogHtml(entry);
     if (entry.type === 'take') return takeLogHtml(entry);
     return `<div class="log-entry text-log"><span class="log-stamp">${escapeHtml(entry.stamp || '')}</span><span class="log-message">${escapeHtml(entry.message || '')}</span></div>`;
   }).join('');
+}
+
+function renderMobileLog() {
+  if (!mobileLog) return;
+  mobileLog.innerHTML = buildLogHtml();
+}
+
+function renderLog() {
+  const log = $('gameLog');
+  log.innerHTML = buildLogHtml();
 }
 
 function moveLogHtml(entry) {
